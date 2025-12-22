@@ -1,0 +1,553 @@
+<Window x:Class="AICompanion.Desktop.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="AI Companion"
+        Height="650"
+        Width="420"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ResizeMode="CanResizeWithGrip"
+        ShowInTaskbar="True">
+
+    <Border CornerRadius="20"
+            Background="{DynamicResource SurfaceBrush}"
+            BorderBrush="{DynamicResource PrimaryBrush}"
+            BorderThickness="2">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="25"
+                              ShadowDepth="5"
+                              Opacity="0.4"
+                              Color="{DynamicResource PrimaryColor}"/>
+        </Border.Effect>
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="45"/>
+                <RowDefinition Height="180"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="90"/>
+            </Grid.RowDefinitions>
+
+            <!-- Toast Notification Overlay -->
+            <Border x:Name="ToastOverlay"
+                    Grid.RowSpan="7"
+                    VerticalAlignment="Top"
+                    HorizontalAlignment="Center"
+                    Margin="0,60,0,0"
+                    Padding="16,10"
+                    CornerRadius="8"
+                    Opacity="0"
+                    Panel.ZIndex="100">
+                <Border.Background>
+                    <SolidColorBrush x:Name="ToastBackground" Color="{DynamicResource SuccessColor}"/>
+                </Border.Background>
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="15" ShadowDepth="3" Opacity="0.3"/>
+                </Border.Effect>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock x:Name="ToastIcon" Text="✓" Foreground="White" FontSize="14" FontWeight="Bold" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="ToastMessage" Text="" Foreground="White" FontSize="13" FontWeight="SemiBold" MaxWidth="280" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Custom title bar -->
+            <Border Grid.Row="0"
+                    Background="{DynamicResource PrimaryGradientBrush}"
+                    CornerRadius="18,18,0,0"
+                    MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+                <Grid>
+                    <StackPanel Orientation="Horizontal"
+                                HorizontalAlignment="Left"
+                                Margin="15,0,0,0"
+                                VerticalAlignment="Center">
+                        <Ellipse Width="10" Height="10" Fill="{DynamicResource PrimaryBrush}" Margin="0,0,8,0"/>
+                        <TextBlock Text="AI Companion"
+                                   Foreground="White"
+                                   FontWeight="SemiBold"
+                                   FontSize="14"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal"
+                                HorizontalAlignment="Right"
+                                Margin="0,0,10,0">
+                        <Button Content="─"
+                                Width="32" Height="32"
+                                Background="Transparent"
+                                Foreground="White"
+                                BorderThickness="0"
+                                FontSize="16"
+                                Click="MinimizeButton_Click"
+                                Cursor="Hand"/>
+                        <Button Content="✕"
+                                Width="32" Height="32"
+                                Background="Transparent"
+                                Foreground="White"
+                                BorderThickness="0"
+                                FontSize="14"
+                                Click="CloseButton_Click"
+                                Cursor="Hand"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Avatar display area -->
+            <Border Grid.Row="1"
+                    Margin="20,15,20,10"
+                    Background="{DynamicResource AvatarPanelBrush}"
+                    CornerRadius="15">
+                <Grid>
+                    <!-- Avatar -->
+                    <Ellipse Width="120" Height="120"
+                             Fill="{DynamicResource PrimaryGradientBrush}"
+                             VerticalAlignment="Center"
+                             HorizontalAlignment="Center">
+                        <Ellipse.Effect>
+                            <DropShadowEffect BlurRadius="15"
+                                              ShadowDepth="3"
+                                              Opacity="0.3"/>
+                        </Ellipse.Effect>
+                    </Ellipse>
+
+                    <!-- Avatar face -->
+                    <Canvas Width="120" Height="120"
+                            VerticalAlignment="Center"
+                            HorizontalAlignment="Center">
+                        <!-- Eyes -->
+                        <Ellipse Canvas.Left="30" Canvas.Top="42"
+                                 Width="18" Height="22"
+                                 Fill="White"/>
+                        <Ellipse Canvas.Left="72" Canvas.Top="42"
+                                 Width="18" Height="22"
+                                 Fill="White"/>
+                        <!-- Pupils -->
+                        <Ellipse x:Name="LeftPupil" Canvas.Left="36" Canvas.Top="50"
+                                 Width="7" Height="9"
+                                 Fill="#1D1D1F"/>
+                        <Ellipse x:Name="RightPupil" Canvas.Left="78" Canvas.Top="50"
+                                 Width="7" Height="9"
+                                 Fill="#1D1D1F"/>
+                        <!-- Mouth -->
+                        <Path x:Name="AvatarMouth" Stroke="White" StrokeThickness="4"
+                              Data="M 40,82 Q 60,95 80,82"
+                              StrokeStartLineCap="Round"
+                              StrokeEndLineCap="Round"/>
+                    </Canvas>
+
+                    <!-- Listening indicator -->
+                    <Border x:Name="ListeningIndicator"
+                            Width="24" Height="24"
+                            CornerRadius="12"
+                            Background="{DynamicResource SuccessBrush}"
+                            Opacity="0"
+                            VerticalAlignment="Bottom"
+                            HorizontalAlignment="Center"
+                            Margin="0,0,0,12">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="8"
+                                              ShadowDepth="0"
+                                              Opacity="0.6"
+                                              Color="{DynamicResource SuccessColor}"/>
+                        </Border.Effect>
+                    </Border>
+
+                    <!-- Status badge -->
+                    <Border x:Name="StatusBadge"
+                            VerticalAlignment="Top"
+                            HorizontalAlignment="Right"
+                            Margin="0,10,10,0"
+                            Padding="8,4"
+                            CornerRadius="10"
+                            Background="{DynamicResource SuccessBrush}">
+                        <TextBlock x:Name="StatusBadgeText"
+                                   Text="Ready"
+                                   Foreground="White"
+                                   FontSize="10"
+                                   FontWeight="SemiBold"/>
+                    </Border>
+
+                    <!-- Tutorial Progress Indicator -->
+                    <Border x:Name="TutorialProgressPanel"
+                            VerticalAlignment="Bottom"
+                            HorizontalAlignment="Center"
+                            Margin="0,0,0,5"
+                            Padding="10,5"
+                            CornerRadius="8"
+                            Background="{DynamicResource PrimaryBrush}"
+                            Visibility="Collapsed">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🎓" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBlock x:Name="TutorialStepText"
+                                       Text="Step 1/5"
+                                       Foreground="White"
+                                       FontSize="10"
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <!-- Active Window Status Indicator -->
+            <Border Grid.Row="2"
+                    Margin="20,5,20,2"
+                    Padding="8,6"
+                    Background="{DynamicResource StatusPanelBrush}"
+                    CornerRadius="8"
+                    BorderBrush="{DynamicResource StatusBorderBrush}"
+                    BorderThickness="1">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="🎯" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock Grid.Column="1"
+                               x:Name="ActiveWindowStatus"
+                               Text="Focus: Ready"
+                               FontSize="11"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center"/>
+                </Grid>
+            </Border>
+
+            <!-- Voice recognition display -->
+            <Border Grid.Row="3"
+                    Margin="20,2,20,5"
+                    Padding="12"
+                    Background="{DynamicResource InputPanelBrush}"
+                    CornerRadius="12"
+                    BorderBrush="{DynamicResource InputBorderBrush}"
+                    BorderThickness="1">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+                        <TextBlock Text="Voice Input"
+                                   FontSize="11"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource PrimaryBrush}"/>
+                        <Ellipse x:Name="VoiceIndicator"
+                                 Width="8" Height="8"
+                                 Fill="#CCC"
+                                 Margin="8,0,0,0"
+                                 VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <TextBlock Grid.Row="1"
+                               x:Name="RecognizedText"
+                               Text="Press and hold the microphone button to speak..."
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               FontSize="13"
+                               FontStyle="Italic"
+                               MinHeight="40"
+                               MaxHeight="60"/>
+                </Grid>
+            </Border>
+
+            <!-- Command history / Response area -->
+            <Border Grid.Row="4"
+                    Margin="20,5,20,5"
+                    Background="{DynamicResource LogPanelBrush}"
+                    CornerRadius="12"
+                    BorderBrush="{DynamicResource LogBorderBrush}"
+                    BorderThickness="1">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <Border Grid.Row="0"
+                            Background="{DynamicResource LogHeaderBrush}"
+                            CornerRadius="12,12,0,0"
+                            Padding="12,8">
+                        <TextBlock Text="Activity Log"
+                                   FontSize="11"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    </Border>
+
+                    <ScrollViewer Grid.Row="1"
+                                  VerticalScrollBarVisibility="Auto"
+                                  Padding="8">
+                        <ItemsControl x:Name="ActivityLog">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Margin="4" Padding="10"
+                                            CornerRadius="8"
+                                            Background="{Binding Background}">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Time}"
+                                                       FontSize="10"
+                                                       Foreground="#999"/>
+                                            <TextBlock Text="{Binding Message}"
+                                                       FontSize="12"
+                                                       TextWrapping="Wrap"
+                                                       Foreground="{Binding TextColor}"/>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+
+            <!-- Quick settings + commands -->
+            <Border Grid.Row="5" Margin="20,5,20,5">
+                <StackPanel>
+                    <TextBlock Text="Voice Settings"
+                               FontSize="10"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               Margin="5,0,0,5"/>
+                    
+                    <!-- Voice Engine Card -->
+                    <Border Background="{DynamicResource CardPanelBrush}"
+                            CornerRadius="10"
+                            Padding="12"
+                            BorderBrush="{DynamicResource CardBorderBrush}"
+                            BorderThickness="1"
+                            Margin="0,0,0,8">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Width="8" Height="8" CornerRadius="4" Margin="0,0,10,0"
+                                    VerticalAlignment="Center">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="{DynamicResource SuccessBrush}"/>
+                                    </Style>
+                                </Border.Style>
+                            </Border>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="🎙️ Speech Recognition"
+                                           FontSize="12"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                <TextBlock x:Name="VoiceEngineStatus"
+                                           Text="ElevenLabs STT (Cloud) ✓"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                            <Button Grid.Column="2"
+                                    Content="⚙️ Settings"
+                                    Style="{DynamicResource QuickCommandStyle}"
+                                    Click="SettingsButton_Click"
+                                    VerticalAlignment="Center"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- TTS Engine Card -->
+                    <Border Background="{DynamicResource CardPanelBrush}"
+                            CornerRadius="10"
+                            Padding="12"
+                            BorderBrush="{DynamicResource CardBorderBrush}"
+                            BorderThickness="1"
+                            Margin="0,0,0,8">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Border x:Name="TTSStatusIndicator" Width="8" Height="8" CornerRadius="4" Margin="0,0,10,0"
+                                    Background="{DynamicResource SuccessBrush}"
+                                    VerticalAlignment="Center"/>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="🔊 Text-to-Speech"
+                                           FontSize="12"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                <TextBlock x:Name="TTSEngineStatus"
+                                           Text="ElevenLabs (Premium) ✓"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                            <Button Grid.Column="2"
+                                    Content="🔊 Test"
+                                    Style="{DynamicResource QuickCommandStyle}"
+                                    Click="TestTTS_Click"
+                                    ToolTip="Test text-to-speech output"
+                                    Margin="5,0,0,0"/>
+                        </Grid>
+                    </Border>
+
+                    <TextBlock Text="Quick Commands"
+                               FontSize="10"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               Margin="5,10,0,5"/>
+                    <WrapPanel>
+                        <Button Content="� Word"
+                                Style="{DynamicResource QuickCommandStyle}"
+                                Click="QuickCommand_Click" Tag="word"/>
+                        <Button Content="�📝 Notepad"
+                                Style="{DynamicResource QuickCommandStyle}"
+                                Click="QuickCommand_Click" Tag="notepad"/>
+                        <Button Content="🔢 Calculator"
+                                Style="{DynamicResource QuickCommandStyle}"
+                                Click="QuickCommand_Click" Tag="calc"/>
+                        <Button Content="🌐 Browser"
+                                Style="{DynamicResource QuickCommandStyle}"
+                                Click="QuickCommand_Click" Tag="browser"/>
+                        <Button Content="📁 Explorer"
+                                Style="{DynamicResource QuickCommandStyle}"
+                                Click="QuickCommand_Click" Tag="explorer"/>
+                        <Button Content="🎓 Tutorial"
+                                Style="{DynamicResource QuickCommandStyle}"
+                                Click="TutorialButton_Click" Tag="tutorial"
+                                Background="{DynamicResource CardPanelBrush}" Foreground="{DynamicResource PrimaryBrush}"/>
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Control buttons -->
+            <Grid Grid.Row="6" Margin="20,5,20,15">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Settings button -->
+                <Button Grid.Column="0"
+                        Width="45" Height="45"
+                        Background="{DynamicResource CardPanelBrush}"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        ToolTip="Settings"
+                        Click="SettingsButton_Click"
+                        Margin="0,0,8,0">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border Background="{TemplateBinding Background}"
+                                    CornerRadius="22">
+                                <TextBlock Text="⚙"
+                                           FontSize="20"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                            </Border>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+
+                <!-- History button -->
+                <Button Grid.Column="1"
+                        Width="45" Height="45"
+                        Background="{DynamicResource CardPanelBrush}"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        ToolTip="Command History"
+                        Click="HistoryButton_Click">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border Background="{TemplateBinding Background}"
+                                    CornerRadius="22">
+                                <TextBlock Text="📋"
+                                           FontSize="18"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                            </Border>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+
+                <!-- Microphone button (centered) -->
+                <Button Grid.Column="2"
+                        x:Name="MicrophoneButton"
+                        Width="70" Height="70"
+                        ToolTip="Hold to speak"
+                        HorizontalAlignment="Center"
+                        PreviewMouseLeftButtonDown="MicrophoneButton_MouseDown"
+                        PreviewMouseLeftButtonUp="MicrophoneButton_MouseUp">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="MicBorder"
+                                    Background="{DynamicResource PrimaryGradientBrush}"
+                                    CornerRadius="35">
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="15"
+                                                      ShadowDepth="3"
+                                                      Opacity="0.4"
+                                                      Color="#667EEA"/>
+                                </Border.Effect>
+                                <Grid>
+                                    <TextBlock x:Name="MicIcon"
+                                               Text="🎤"
+                                               FontSize="28"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"/>
+                                </Grid>
+                            </Border>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+
+                <!-- Dictation toggle button -->
+                <Button Grid.Column="3"
+                        x:Name="DictationButton"
+                        Width="45" Height="45"
+                        Background="{DynamicResource CardPanelBrush}"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        ToolTip="Toggle Dictation Mode"
+                        Click="DictationButton_Click"
+                        Margin="0,0,8,0">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="DictBorder"
+                                    Background="{TemplateBinding Background}"
+                                    CornerRadius="22">
+                                <TextBlock x:Name="DictIcon"
+                                           Text="✍"
+                                           FontSize="18"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                            </Border>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+
+                <!-- Help button -->
+                <Button Grid.Column="4"
+                        Width="45" Height="45"
+                        Background="{DynamicResource CardPanelBrush}"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        ToolTip="Help &amp; Commands"
+                        Click="HelpButton_Click">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border Background="{TemplateBinding Background}"
+                                    CornerRadius="22">
+                                <TextBlock Text="?"
+                                           FontSize="20"
+                                           FontWeight="Bold"
+                                           Foreground="{DynamicResource PrimaryBrush}"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                            </Border>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>
