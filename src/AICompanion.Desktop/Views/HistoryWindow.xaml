@@ -1,0 +1,232 @@
+<Window x:Class="AICompanion.Desktop.Views.HistoryWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="Command History - AI Companion"
+        Height="550"
+        Width="700"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource BackgroundBrush}">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Border Grid.Row="0" Background="{StaticResource PrimaryGradientBrush}" Padding="20,15">
+            <Grid>
+                <StackPanel>
+                    <TextBlock Text="Command History"
+                               FontSize="20"
+                               FontWeight="SemiBold"
+                               Foreground="White"/>
+                    <TextBlock x:Name="HistoryCountText"
+                               Text="0 commands"
+                               FontSize="12"
+                               Foreground="#CCFFFFFF"
+                               Margin="0,4,0,0"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Search and Filter Bar -->
+        <Border Grid.Row="1" Background="White" Padding="15,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Search Box -->
+                <Grid Grid.Column="0" Margin="0,0,15,0">
+                    <TextBox x:Name="SearchBox"
+                             Padding="10,8,35,8"
+                             FontSize="13"
+                             TextChanged="SearchBox_TextChanged"/>
+                    <TextBlock Text="Search commands..."
+                               IsHitTestVisible="False"
+                               Foreground="Gray"
+                               VerticalAlignment="Center"
+                               Margin="12,0,0,0"
+                               Visibility="{Binding Text.IsEmpty, ElementName=SearchBox, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Visible}"/>
+                    <TextBlock Text="&#128269;"
+                               FontSize="14"
+                               HorizontalAlignment="Right"
+                               VerticalAlignment="Center"
+                               Margin="0,0,10,0"
+                               Foreground="Gray"/>
+                </Grid>
+
+                <!-- Date Filter -->
+                <ComboBox Grid.Column="1"
+                          x:Name="DateFilterCombo"
+                          Width="130"
+                          Margin="0,0,10,0"
+                          SelectionChanged="DateFilter_Changed">
+                    <ComboBoxItem Content="All Time" IsSelected="True"/>
+                    <ComboBoxItem Content="Today"/>
+                    <ComboBoxItem Content="Last 7 Days"/>
+                    <ComboBoxItem Content="Last 30 Days"/>
+                    <ComboBoxItem Content="Custom Range"/>
+                </ComboBox>
+
+                <!-- Type Filter -->
+                <ComboBox Grid.Column="2"
+                          x:Name="TypeFilterCombo"
+                          Width="120"
+                          Margin="0,0,10,0"
+                          SelectionChanged="TypeFilter_Changed">
+                    <ComboBoxItem Content="All Types" IsSelected="True"/>
+                    <ComboBoxItem Content="Voice Commands"/>
+                    <ComboBoxItem Content="Quick Actions"/>
+                    <ComboBoxItem Content="Dictation"/>
+                    <ComboBoxItem Content="System"/>
+                </ComboBox>
+
+                <!-- Refresh Button -->
+                <Button Grid.Column="3"
+                        Content="Refresh"
+                        Click="Refresh_Click"
+                        Style="{StaticResource QuickCommandStyle}"/>
+            </Grid>
+        </Border>
+
+        <!-- History List -->
+        <Border Grid.Row="2" Margin="15,10,15,10">
+            <ListView x:Name="HistoryListView"
+                      Background="White"
+                      BorderBrush="#E0E0E0"
+                      BorderThickness="1"
+                      SelectionMode="Extended">
+                <ListView.View>
+                    <GridView>
+                        <GridViewColumn Header="Time" Width="140">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Timestamp, StringFormat='{}{0:MM/dd HH:mm:ss}'}"
+                                               FontSize="12"/>
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+
+                        <GridViewColumn Header="Command" Width="250">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Command}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding Command}"
+                                               FontSize="12"/>
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+
+                        <GridViewColumn Header="Type" Width="100">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Border Background="{Binding TypeColor}"
+                                            CornerRadius="10"
+                                            Padding="8,2">
+                                        <TextBlock Text="{Binding Type}"
+                                                   FontSize="10"
+                                                   Foreground="White"/>
+                                    </Border>
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+
+                        <GridViewColumn Header="Result" Width="80">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding ResultIcon}"
+                                               FontSize="14"
+                                               HorizontalAlignment="Center"/>
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+
+                        <GridViewColumn Header="Details" Width="150">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Details}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding Details}"
+                                               FontSize="11"
+                                               Foreground="Gray"/>
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+                    </GridView>
+                </ListView.View>
+
+                <!-- Empty State -->
+                <ListView.Style>
+                    <Style TargetType="ListView">
+                        <Style.Triggers>
+                            <Trigger Property="HasItems" Value="False">
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate>
+                                            <Border Background="White">
+                                                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                                    <TextBlock Text="No commands found"
+                                                               FontSize="16"
+                                                               Foreground="Gray"
+                                                               HorizontalAlignment="Center"/>
+                                                    <TextBlock Text="Your voice command history will appear here"
+                                                               FontSize="12"
+                                                               Foreground="LightGray"
+                                                               Margin="0,5,0,0"
+                                                               HorizontalAlignment="Center"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </ListView.Style>
+            </ListView>
+        </Border>
+
+        <!-- Footer -->
+        <Border Grid.Row="3" Background="#F5F5F5" Padding="15,10">
+            <Grid>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                    <Button Content="Export Selected"
+                            Click="ExportSelected_Click"
+                            Style="{StaticResource QuickCommandStyle}"
+                            Margin="0,0,10,0"/>
+                    <Button Content="Delete Selected"
+                            Click="DeleteSelected_Click"
+                            Style="{StaticResource QuickCommandStyle}"
+                            Foreground="#E5484D"
+                            Margin="0,0,10,0"/>
+                    <Button Content="Replay Command"
+                            Click="ReplayCommand_Click"
+                            Style="{StaticResource QuickCommandStyle}"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Content="Export All"
+                            Click="ExportAll_Click"
+                            Style="{StaticResource QuickCommandStyle}"
+                            Margin="0,0,10,0"/>
+                    <Button Content="Close"
+                            Click="Close_Click"
+                            Width="80"
+                            Padding="10,8"
+                            Background="#E0E0E0"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
