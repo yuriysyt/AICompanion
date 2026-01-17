@@ -1,0 +1,175 @@
+syntax = "proto3";
+
+option csharp_namespace = "AICompanion.Desktop.Grpc";
+
+package aicompanion;
+
+/*
+    AI Service Protocol Buffer Definition
+    
+    This file defines the communication contract between the C# desktop application
+    and the Python AI engine. The gRPC framework uses this definition to generate
+    strongly-typed client code in C# and server code in Python.
+    
+    The protocol supports bidirectional streaming for real-time voice interaction
+    and uses binary serialization for efficient data transfer.
+    
+    Reference: https://grpc.io/docs/languages/csharp/basics/
+*/
+
+service AIService {
+    /*
+        ProcessCommand handles a single voice command from the user.
+        The desktop application sends the transcribed text along with
+        a screenshot of the current screen state. The AI engine analyzes
+        both inputs and returns a structured action response.
+    */
+    rpc ProcessCommand (CommandRequest) returns (CommandResponse);
+    
+    /*
+        StreamCommands enables real-time bidirectional communication.
+        This is useful for continuous conversation where context from
+        previous exchanges affects the interpretation of new commands.
+    */
+    rpc StreamCommands (stream CommandRequest) returns (stream CommandResponse);
+    
+    /*
+        GetSystemStatus returns the current state of the AI engine,
+        including model loading status, memory usage, and availability.
+    */
+    rpc GetSystemStatus (StatusRequest) returns (StatusResponse);
+}
+
+message CommandRequest {
+    /*
+        The transcribed text from the user's voice command.
+        This comes from ElevenLabs Speech-to-Text API.
+    */
+    string command_text = 1;
+    
+    /*
+        Screenshot of the current screen encoded as PNG bytes.
+        The AI engine uses this to understand the visual context
+        and identify UI elements that can be interacted with.
+    */
+    bytes screenshot_data = 2;
+    
+    /*
+        Unique identifier for tracking this command through
+        the processing pipeline for logging and debugging.
+    */
+    string request_id = 3;
+    
+    /*
+        Timestamp when the command was captured, used for
+        measuring end-to-end latency and performance analysis.
+    */
+    int64 timestamp_ms = 4;
+    
+    /*
+        Optional context from previous interactions to help
+        the AI understand references like "do that again".
+    */
+    repeated string conversation_history = 5;
+}
+
+message CommandResponse {
+    /*
+        The type of action the AI has determined should be executed.
+        This maps to specific handler methods in the automation service.
+    */
+    ActionType action_type = 1;
+    
+    /*
+        Detailed parameters for the action, encoded as JSON string.
+        The structure depends on the action_type.
+    */
+    string action_parameters = 2;
+    
+    /*
+        Human-readable response text to be spoken back to the user
+        using the text-to-speech service.
+    */
+    string response_text = 3;
+    
+    /*
+        Confidence score between 0.0 and 1.0 indicating how certain
+        the AI is about its interpretation of the command.
+    */
+    float confidence_score = 4;
+    
+    /*
+        If the AI needs clarification, this contains a question
+        to ask the user before proceeding with the action.
+    */
+    string clarification_question = 5;
+    
+    /*
+        Echo back the request_id for correlation with the original request.
+    */
+    string request_id = 6;
+    
+    /*
+        Processing time in milliseconds on the AI engine side,
+        useful for performance monitoring and optimization.
+    */
+    int32 processing_time_ms = 7;
+}
+
+enum ActionType {
+    ACTION_UNKNOWN = 0;
+    ACTION_OPEN_APPLICATION = 1;
+    ACTION_CLOSE_WINDOW = 2;
+    ACTION_CLICK_ELEMENT = 3;
+    ACTION_TYPE_TEXT = 4;
+    ACTION_SEARCH_FILES = 5;
+    ACTION_NAVIGATE = 6;
+    ACTION_SCROLL = 7;
+    ACTION_KEYBOARD_SHORTCUT = 8;
+    ACTION_READ_SCREEN = 9;
+    ACTION_DESCRIBE_ELEMENT = 10;
+    ACTION_EXPLAIN_HELP = 11;
+    ACTION_SYSTEM_CONTROL = 12;
+    ACTION_CLARIFICATION_NEEDED = 13;
+    ACTION_ERROR = 14;
+}
+
+message StatusRequest {
+    /*
+        Optional flag to request detailed diagnostics
+        including memory usage and model statistics.
+    */
+    bool include_diagnostics = 1;
+}
+
+message StatusResponse {
+    /*
+        Whether the AI engine is ready to process commands.
+    */
+    bool is_ready = 1;
+    
+    /*
+        Name and version of the loaded AI model.
+    */
+    string model_name = 2;
+    
+    /*
+        Current GPU memory usage in megabytes.
+    */
+    int32 gpu_memory_mb = 3;
+    
+    /*
+        Number of commands processed since startup.
+    */
+    int64 commands_processed = 4;
+    
+    /*
+        Average response time in milliseconds.
+    */
+    int32 average_response_ms = 5;
+    
+    /*
+        Any error message if the engine is not ready.
+    */
+    string error_message = 6;
+}
