@@ -143,16 +143,6 @@
                             Create one
                         </Hyperlink>
                     </TextBlock>
-
-                    <!-- Skip Login (for testing) -->
-                    <Button Content="Skip Login (Development)"
-                            Background="Transparent"
-                            Foreground="Gray"
-                            BorderThickness="0"
-                            Margin="0,20,0,0"
-                            FontSize="11"
-                            Click="SkipLogin_Click"
-                            Cursor="Hand"/>
                 </StackPanel>
 
                 <!-- Register Panel -->

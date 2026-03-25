@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Extensions.DependencyInjection;
+using AICompanion.Desktop.Configuration;
 using AICompanion.Desktop.Services.Voice;
 using AICompanion.Desktop.Services.Database;
 
@@ -13,7 +14,7 @@ namespace AICompanion.Desktop.Views
     {
         private readonly UnifiedVoiceManager? _voiceManager;
         private readonly DatabaseService? _databaseService;
-        private VoiceSettings _settings = new();
+        private Services.Voice.VoiceSettings _settings = new();
 
         public SettingsWindow()
         {
@@ -48,30 +49,64 @@ namespace AICompanion.Desktop.Views
                     {
                         ElevenLabsApiKeyBox.Text = elevenLabs.TryGetProperty("ApiKey", out var key) ? key.GetString() ?? "" : "";
                         ElevenLabsVoiceIdBox.Text = elevenLabs.TryGetProperty("VoiceId", out var voice) ? voice.GetString() ?? "21m00Tcm4TlvDq8ikWAM" : "21m00Tcm4TlvDq8ikWAM";
-                        
-                        // Default to true if property doesn't exist
                         ElevenLabsTTSEnabled.IsChecked = elevenLabs.TryGetProperty("TTSEnabled", out var tts) ? tts.GetBoolean() : true;
                         ElevenLabsSTTEnabled.IsChecked = elevenLabs.TryGetProperty("STTEnabled", out var stt) ? stt.GetBoolean() : true;
                     }
-
 
                     // Load security settings
                     if (doc.RootElement.TryGetProperty("Security", out var security))
                     {
                         RequireLoginCheck.IsChecked = security.TryGetProperty("RequireLogin", out var login) ? login.GetBoolean() : true;
                         RequireSecurityCodeCheck.IsChecked = security.TryGetProperty("RequireSecurityCode", out var code) ? code.GetBoolean() : true;
+
+                        if (security.TryGetProperty("SecurityCodeTimeout", out var timeout))
+                        {
+                            SelectComboByTag(SecurityCodeTimeoutCombo, timeout.GetInt32().ToString());
+                        }
+                        if (security.TryGetProperty("AutoLockMinutes", out var autoLock))
+                        {
+                            SelectComboByTag(AutoLockCombo, autoLock.GetInt32().ToString());
+                        }
                     }
 
-                    // Load appearance settings
+                    // Load dictation settings
+                    if (doc.RootElement.TryGetProperty("Dictation", out var dictation))
+                    {
+                        AutoDictationCheck.IsChecked = dictation.TryGetProperty("AutoDetect", out var autoDetect) ? autoDetect.GetBoolean() : true;
+                        AutoPunctuationCheck.IsChecked = dictation.TryGetProperty("AutoPunctuation", out var punct) ? punct.GetBoolean() : true;
+                        AutoCapitalizationCheck.IsChecked = dictation.TryGetProperty("AutoCapitalization", out var cap) ? cap.GetBoolean() : true;
+                        TargetWordCheck.IsChecked = dictation.TryGetProperty("TargetWord", out var tw) ? tw.GetBoolean() : true;
+                        TargetNotepadCheck.IsChecked = dictation.TryGetProperty("TargetNotepad", out var tn) ? tn.GetBoolean() : true;
+                        TargetVSCodeCheck.IsChecked = dictation.TryGetProperty("TargetVSCode", out var tv) ? tv.GetBoolean() : false;
+                    }
+
+                    // Load appearance settings (theme, window, notifications)
                     if (doc.RootElement.TryGetProperty("Appearance", out var appearance))
                     {
+                        // Theme radio buttons
+                        var theme = appearance.TryGetProperty("Theme", out var themeProp) ? themeProp.GetString() ?? "Light" : "Light";
+                        ThemeLight.IsChecked = theme == "Light";
+                        ThemeDark.IsChecked = theme == "Dark";
+                        ThemeSystem.IsChecked = theme == "System";
+
                         AlwaysOnTopCheck.IsChecked = appearance.TryGetProperty("AlwaysOnTop", out var top) ? top.GetBoolean() : false;
                         MinimizeToTrayCheck.IsChecked = appearance.TryGetProperty("MinimizeToTray", out var tray) ? tray.GetBoolean() : false;
+                        StartMinimizedCheck.IsChecked = appearance.TryGetProperty("StartMinimized", out var startMin) ? startMin.GetBoolean() : false;
                         ShowToastCheck.IsChecked = appearance.TryGetProperty("ShowToast", out var toast) ? toast.GetBoolean() : true;
+                        PlaySoundsCheck.IsChecked = appearance.TryGetProperty("PlaySounds", out var sounds) ? sounds.GetBoolean() : true;
 
                         if (appearance.TryGetProperty("Opacity", out var opacity))
                         {
                             OpacitySlider.Value = opacity.GetDouble();
+                        }
+                    }
+
+                    // Load database settings
+                    if (doc.RootElement.TryGetProperty("Database", out var database))
+                    {
+                        if (database.TryGetProperty("HistoryRetentionDays", out var retention))
+                        {
+                            SelectComboByTag(HistoryRetentionCombo, retention.GetInt32().ToString());
                         }
                     }
                 }
@@ -79,6 +114,21 @@ namespace AICompanion.Desktop.Views
             catch (Exception ex)
             {
                 System.Windows.MessageBox.Show($"Error loading settings: {ex.Message}", "Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            }
+        }
+
+        /// <summary>
+        /// Selects the ComboBoxItem whose Tag matches the given value string.
+        /// </summary>
+        private static void SelectComboByTag(System.Windows.Controls.ComboBox combo, string tagValue)
+        {
+            foreach (ComboBoxItem item in combo.Items)
+            {
+                if (item.Tag?.ToString() == tagValue)
+                {
+                    combo.SelectedItem = item;
+                    return;
+                }
             }
         }
 
@@ -107,49 +157,65 @@ namespace AICompanion.Desktop.Views
         {
             try
             {
-                var settings = new
+                var configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "appsettings.json");
+
+                // MERGE STRATEGY: Load existing JSON, update only the sections we control
+                Dictionary<string, object>? existingConfig = null;
+                if (File.Exists(configPath))
                 {
-                    ElevenLabs = new
+                    try
                     {
-                        ApiKey = ElevenLabsApiKeyBox.Text.Trim(),
-                        VoiceId = ElevenLabsVoiceIdBox.Text.Trim(),
-                        TTSEnabled = ElevenLabsTTSEnabled.IsChecked == true,
-                        STTEnabled = ElevenLabsSTTEnabled.IsChecked == true
-                    },
-                    Security = new
-                    {
-                        RequireLogin = RequireLoginCheck.IsChecked == true,
-                        RequireSecurityCode = RequireSecurityCodeCheck.IsChecked == true,
-                        SecurityCodeTimeout = int.Parse((SecurityCodeTimeoutCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "60"),
-                        AutoLockMinutes = int.Parse((AutoLockCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "15")
-                    },
-                    Dictation = new
-                    {
-                        AutoDetect = AutoDictationCheck.IsChecked == true,
-                        AutoPunctuation = AutoPunctuationCheck.IsChecked == true,
-                        AutoCapitalization = AutoCapitalizationCheck.IsChecked == true,
-                        TargetWord = TargetWordCheck.IsChecked == true,
-                        TargetNotepad = TargetNotepadCheck.IsChecked == true,
-                        TargetVSCode = TargetVSCodeCheck.IsChecked == true
-                    },
-                    Appearance = new
-                    {
-                        Theme = ThemeLight.IsChecked == true ? "Light" : ThemeDark.IsChecked == true ? "Dark" : "System",
-                        AlwaysOnTop = AlwaysOnTopCheck.IsChecked == true,
-                        MinimizeToTray = MinimizeToTrayCheck.IsChecked == true,
-                        StartMinimized = StartMinimizedCheck.IsChecked == true,
-                        Opacity = OpacitySlider.Value,
-                        ShowToast = ShowToastCheck.IsChecked == true,
-                        PlaySounds = PlaySoundsCheck.IsChecked == true
-                    },
-                    Database = new
-                    {
-                        HistoryRetentionDays = int.Parse((HistoryRetentionCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "30")
+                        var existingJson = await File.ReadAllTextAsync(configPath);
+                        existingConfig = JsonSerializer.Deserialize<Dictionary<string, object>>(existingJson);
                     }
+                    catch { /* If parse fails, start fresh */ }
+                }
+                existingConfig ??= new Dictionary<string, object>();
+
+                // Update only the sections the Settings UI controls
+                existingConfig["ElevenLabs"] = new
+                {
+                    ApiKey = ElevenLabsApiKeyBox.Text.Trim(),
+                    VoiceId = ElevenLabsVoiceIdBox.Text.Trim(),
+                    TTSEnabled = ElevenLabsTTSEnabled.IsChecked == true,
+                    STTEnabled = ElevenLabsSTTEnabled.IsChecked == true
                 };
 
-                var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
-                var configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "appsettings.json");
+                existingConfig["Security"] = new
+                {
+                    RequireLogin = RequireLoginCheck.IsChecked == true,
+                    RequireSecurityCode = RequireSecurityCodeCheck.IsChecked == true,
+                    SecurityCodeTimeout = int.Parse((SecurityCodeTimeoutCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "60"),
+                    AutoLockMinutes = int.Parse((AutoLockCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "15")
+                };
+
+                existingConfig["Dictation"] = new
+                {
+                    AutoDetect = AutoDictationCheck.IsChecked == true,
+                    AutoPunctuation = AutoPunctuationCheck.IsChecked == true,
+                    AutoCapitalization = AutoCapitalizationCheck.IsChecked == true,
+                    TargetWord = TargetWordCheck.IsChecked == true,
+                    TargetNotepad = TargetNotepadCheck.IsChecked == true,
+                    TargetVSCode = TargetVSCodeCheck.IsChecked == true
+                };
+
+                existingConfig["Appearance"] = new
+                {
+                    Theme = ThemeLight.IsChecked == true ? "Light" : ThemeDark.IsChecked == true ? "Dark" : "System",
+                    AlwaysOnTop = AlwaysOnTopCheck.IsChecked == true,
+                    MinimizeToTray = MinimizeToTrayCheck.IsChecked == true,
+                    StartMinimized = StartMinimizedCheck.IsChecked == true,
+                    Opacity = OpacitySlider.Value,
+                    ShowToast = ShowToastCheck.IsChecked == true,
+                    PlaySounds = PlaySoundsCheck.IsChecked == true
+                };
+
+                existingConfig["Database"] = new
+                {
+                    HistoryRetentionDays = int.Parse((HistoryRetentionCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "30")
+                };
+
+                var json = JsonSerializer.Serialize(existingConfig, new JsonSerializerOptions { WriteIndented = true });
                 await File.WriteAllTextAsync(configPath, json);
 
                 // Apply theme immediately
@@ -159,7 +225,7 @@ namespace AICompanion.Desktop.Views
                 // Apply ElevenLabs configuration
                 if (_voiceManager != null)
                 {
-                    var voiceSettings = new VoiceSettings
+                    var voiceSettings = new Services.Voice.VoiceSettings
                     {
                         ElevenLabsApiKey = ElevenLabsApiKeyBox.Text.Trim(),
                         ElevenLabsVoiceId = ElevenLabsVoiceIdBox.Text.Trim()

@@ -13,6 +13,7 @@ using AICompanion.Desktop.Services.Automation;
 using AICompanion.Desktop.Services.Communication;
 using AICompanion.Desktop.Services.Database;
 using AICompanion.Desktop.Services.Security;
+using AICompanion.Desktop.Services;
 using AICompanion.Desktop.Services.Dictation;
 using AICompanion.Desktop.ViewModels;
 using AICompanion.Desktop.Views;
@@ -73,6 +74,22 @@ namespace AICompanion.Desktop
             ServiceProvider = services.BuildServiceProvider();
 
             Log.Information("Services configured successfully");
+
+            // Initialize database before any views load
+            try
+            {
+                var dbService = ServiceProvider.GetRequiredService<DatabaseService>();
+                dbService.InitializeAsync().GetAwaiter().GetResult();
+                Log.Information("Database initialized successfully");
+            }
+            catch (Exception ex)
+            {
+                Log.Fatal(ex, "Failed to initialize local database");
+                System.Windows.MessageBox.Show("Fatal Error: Could not initialize application database.\n\n" + ex.Message, 
+                                "AI Companion Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                Shutdown(-1);
+                return;
+            }
 
             // Apply saved theme
             ApplyThemeFromConfig();
@@ -346,9 +363,30 @@ namespace AICompanion.Desktop
             services.AddSingleton<UIAutomationService>();
 
             /*
+                Window automation helper for reliable Win32 focus and text input.
+            */
+            services.AddSingleton<WindowAutomationHelper>();
+
+            /*
+                Agentic execution service for multi-step plan execution from /api/plan.
+            */
+            services.AddSingleton<AgenticExecutionService>(sp =>
+            {
+                var automation = sp.GetRequiredService<WindowAutomationHelper>();
+                var logger = sp.GetService<ILogger<AgenticExecutionService>>();
+                return new AgenticExecutionService(automation, logger);
+            });
+
+            /*
                 AI engine client communicates with the Python backend.
             */
             services.AddSingleton<AIEngineClient>();
+
+            /*
+                Local command processor for voice command recognition and execution.
+                Registered as Singleton to maintain window state across commands.
+            */
+            services.AddSingleton<LocalCommandProcessor>();
 
             /*
                 View models implement the MVVM pattern for data binding.

@@ -143,18 +143,7 @@ namespace AICompanion.Desktop.Views
                     }
                 }
 
-                // Fallback: simple validation for development
-                if (username == "admin" && password == "admin")
-                {
-                    IsAuthenticated = true;
-                    AuthenticatedUser = username;
-                    DialogResult = true;
-                    Close();
-                }
-                else
-                {
-                    ShowError("Invalid username or password");
-                }
+                ShowError("Security service unavailable. Please restart the application.");
             }
             catch (Exception ex)
             {
@@ -216,11 +205,7 @@ namespace AICompanion.Desktop.Views
                     }
                 }
 
-                // Fallback for development
-                System.Windows.MessageBox.Show("Account created successfully!", "Registration Complete",
-                    System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
-                ShowLogin_Click(sender, e);
-                UsernameBox.Text = username;
+                ShowRegisterError("Security service unavailable. Please restart the application.");
             }
             catch (Exception ex)
             {
@@ -250,8 +235,8 @@ namespace AICompanion.Desktop.Views
         private void ForgotPassword_Click(object sender, RoutedEventArgs e)
         {
             System.Windows.MessageBox.Show(
-                "Password reset instructions will be sent to your email.\n\n" +
-                "For development, use: admin/admin",
+                "Password reset instructions will be sent to your registered email address.\n\n" +
+                "If you don't have access to your email, please contact your administrator.",
                 "Forgot Password",
                 System.Windows.MessageBoxButton.OK,
                 System.Windows.MessageBoxImage.Information);
@@ -271,13 +256,7 @@ namespace AICompanion.Desktop.Views
             UsernameBox.Focus();
         }
 
-        private void SkipLogin_Click(object sender, RoutedEventArgs e)
-        {
-            IsAuthenticated = true;
-            AuthenticatedUser = "development";
-            DialogResult = true;
-            Close();
-        }
+        // SkipLogin removed — all authentication flows through SecurityService + Database
 
         private void ShowError(string message)
         {

@@ -13,6 +13,7 @@ using AICompanion.Desktop.Services.Voice;
 using AICompanion.Desktop.Services.Tutorial;
 using AICompanion.Desktop.Services.Dictation;
 using AICompanion.Desktop.Helpers;
+using AICompanion.Desktop.Services.Automation;
 using WpfBrush = System.Windows.Media.Brush;
 using WpfBrushes = System.Windows.Media.Brushes;
 using WpfColor = System.Windows.Media.Color;
@@ -29,6 +30,7 @@ namespace AICompanion.Desktop.Views
         private readonly TutorialService _tutorialService;
         private readonly DictationService? _dictationService;
         private readonly UnifiedVoiceManager? _unifiedVoiceManager;
+        private readonly AgenticExecutionService? _agenticService;
         private readonly ObservableCollection<ActivityLogItem> _activityItems;
         private bool _isDictationMode;
         private bool _isListening;
@@ -56,25 +58,6 @@ namespace AICompanion.Desktop.Views
             _commandProcessor = new LocalCommandProcessor();
             _tutorialService = new TutorialService();
 
-            // Subscribe to command processor events for toast notifications
-            _commandProcessor.ActionExecuted += (s, message) =>
-            {
-                Dispatcher.Invoke(() =>
-                {
-                    ShowToast(message, true);
-                    var windowInfo = _commandProcessor.GetCurrentActiveWindowInfo();
-                    UpdateActiveWindowStatus(windowInfo, IntPtr.Zero);
-                });
-            };
-            _commandProcessor.FocusError += (s, error) =>
-            {
-                Dispatcher.Invoke(() =>
-                {
-                    ShowToast(error, false);
-                    UpdateActiveWindowStatus("Focus Error", IntPtr.Zero);
-                });
-            };
-            
             // Subscribe to tutorial events for speech feedback
             _tutorialService.SpeechRequested += (s, speech) =>
             {
@@ -128,9 +111,10 @@ namespace AICompanion.Desktop.Views
                     DataContext = _viewModel;
                 }
 
-                // Get unified voice manager and dictation service
+                // Get unified voice manager, dictation, and agentic execution service
                 _unifiedVoiceManager = App.ServiceProvider?.GetService<UnifiedVoiceManager>();
                 _dictationService = App.ServiceProvider?.GetService<DictationService>();
+                _agenticService = App.ServiceProvider?.GetService<AgenticExecutionService>();
 
                 // Subscribe to UnifiedVoiceManager events
                 if (_unifiedVoiceManager != null)
@@ -414,16 +398,16 @@ namespace AICompanion.Desktop.Views
         private void ProcessLocalCommand(string text)
         {
             // If tutorial is active, let it process the command first
-            // If tutorial handles the command, don't process it again
             if (_tutorialService.IsActive)
             {
                 var handled = _tutorialService.ProcessCommand(text);
-                if (handled)
-                {
-                    // Tutorial handled this command - don't double-process
-                    return;
-                }
+                if (handled) return;
             }
+
+            // Phase 6: Capture target window BEFORE processing (so we know context)
+            _commandProcessor.CaptureTargetWindow();
+            var windowInfo = _commandProcessor.GetCurrentActiveWindowInfo();
+            AddActivity($"[INFO] Processing command... ({windowInfo})", true);
 
             var result = _commandProcessor.ProcessCommand(text);
 
@@ -451,6 +435,16 @@ namespace AICompanion.Desktop.Views
                 return;
             }
 
+            // PHASE 5: Route complex commands to AgenticExecutionService
+            if (result.SpeechResponse == "AGENTIC_PLAN_REQUIRED" && _agenticService != null)
+            {
+                AddActivity($"🤖 [INFO] Routing to Agentic AI planner: \"{text}\"", true);
+                AddActivity($"[INFO] Sending context to IBM Granite...", true);
+                UpdateStatus("Planning...", true);
+                _ = ExecuteAgenticPlanAsync(text);
+                return;
+            }
+
             AddActivity(result.Description, result.Success);
             UpdateAvatarExpression(result.Success);
 
@@ -472,6 +466,93 @@ namespace AICompanion.Desktop.Views
                 ResetAvatarExpression();
             };
             timer.Start();
+        }
+
+        /// <summary>
+        /// Executes a complex multi-step command via the AgenticExecutionService.
+        /// Sends command to Python /api/plan, receives a plan, and executes each step.
+        /// </summary>
+        private async System.Threading.Tasks.Task ExecuteAgenticPlanAsync(string commandText)
+        {
+            if (_agenticService == null)
+            {
+                AddActivity("Agentic service not available", false);
+                return;
+            }
+
+            try
+            {
+                // Subscribe to step events for real-time UI updates
+                void OnStep(object? s, StepExecutedArgs args)
+                {
+                    Dispatcher.Invoke(() =>
+                    {
+                        var icon = args.Success ? "✅" : "❌";
+                        AddActivity($"{icon} Step {args.StepNumber}/{args.TotalSteps}: {args.Action} — {args.Description}", args.Success);
+                        UpdateStatus($"Step {args.StepNumber}/{args.TotalSteps}: {args.Action}", true);
+                    });
+                }
+
+                void OnPlan(object? s, AgenticPlanDto plan)
+                {
+                    Dispatcher.Invoke(() =>
+                    {
+                        AddActivity($"[INFO] Parsing JSON Agentic Plan...", true);
+                        AddActivity($"📋 Plan: {plan.TotalSteps} steps — {plan.Reasoning}", true);
+                        for (int i = 0; i < plan.Steps.Count; i++)
+                        {
+                            var st = plan.Steps[i];
+                            AddActivity($"   → Step {st.StepNumber}: {st.Action} (target: {st.Target ?? "—"})", true);
+                        }
+                        _ = SpeakAsync($"I have a plan with {plan.TotalSteps} steps. Executing now.");
+                    });
+                }
+
+                _agenticService.StepExecuted += OnStep;
+                _agenticService.PlanReceived += OnPlan;
+
+                var result = await _agenticService.ExecuteCommandAsync(commandText);
+
+                _agenticService.StepExecuted -= OnStep;
+                _agenticService.PlanReceived -= OnPlan;
+
+                Dispatcher.Invoke(() =>
+                {
+                    if (result.Success)
+                    {
+                        AddActivity($"🎉 {result.Summary}", true);
+                        UpdateAvatarExpression(true);
+                        _ = SpeakAsync("All done! Plan executed successfully.");
+                    }
+                    else
+                    {
+                        AddActivity($"⚠️ {result.Summary}", false);
+                        UpdateAvatarExpression(false);
+                        _ = SpeakAsync($"There was an issue: {result.Summary}");
+                    }
+
+                    UpdateStatus("Ready", true);
+
+                    var timer = new System.Windows.Threading.DispatcherTimer
+                    {
+                        Interval = TimeSpan.FromSeconds(3)
+                    };
+                    timer.Tick += (ts, te) =>
+                    {
+                        ((System.Windows.Threading.DispatcherTimer)ts!).Stop();
+                        ResetAvatarExpression();
+                    };
+                    timer.Start();
+                });
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    AddActivity($"Agentic execution error: {ex.Message}", false);
+                    UpdateStatus("Error", false);
+                });
+            }
         }
 
         private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -767,18 +848,28 @@ namespace AICompanion.Desktop.Views
         {
             var configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "appsettings.json");
 
-            var jsonObject = new
+            // MERGE STRATEGY: preserve existing settings, only update ElevenLabs section
+            Dictionary<string, object>? existing = null;
+            if (File.Exists(configPath))
             {
-                ElevenLabs = new
+                try
                 {
-                    ApiKey = config.ElevenLabsApiKey,
-                    VoiceId = config.ElevenLabsVoiceId,
-                    TTSEnabled = config.ElevenLabsTtsEnabled,
-                    STTEnabled = config.ElevenLabsSttEnabled
+                    var existingJson = await File.ReadAllTextAsync(configPath);
+                    existing = JsonSerializer.Deserialize<Dictionary<string, object>>(existingJson);
                 }
+                catch { }
+            }
+            existing ??= new Dictionary<string, object>();
+
+            existing["ElevenLabs"] = new
+            {
+                ApiKey = config.ElevenLabsApiKey,
+                VoiceId = config.ElevenLabsVoiceId,
+                TTSEnabled = config.ElevenLabsTtsEnabled,
+                STTEnabled = config.ElevenLabsSttEnabled
             };
 
-            var json = JsonSerializer.Serialize(jsonObject, new JsonSerializerOptions { WriteIndented = true });
+            var json = JsonSerializer.Serialize(existing, new JsonSerializerOptions { WriteIndented = true });
             await File.WriteAllTextAsync(configPath, json);
         }
 

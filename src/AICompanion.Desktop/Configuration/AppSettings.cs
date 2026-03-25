@@ -238,4 +238,59 @@ namespace AICompanion.Desktop.Configuration
         */
         public bool RequireAuthentication { get; set; } = false;
     }
+
+    /// <summary>
+    /// Strongly-typed representation of appsettings.json for serialization/deserialization.
+    /// Used by SettingsWindow to save and load settings correctly.
+    /// </summary>
+    public class AppSettingsFile
+    {
+        public ElevenLabsFileSettings ElevenLabs { get; set; } = new();
+        public SecurityFileSettings Security { get; set; } = new();
+        public DictationFileSettings Dictation { get; set; } = new();
+        public AppearanceFileSettings Appearance { get; set; } = new();
+        public DatabaseFileSettings Database { get; set; } = new();
+    }
+
+    public class ElevenLabsFileSettings
+    {
+        public string ApiKey { get; set; } = "";
+        public string VoiceId { get; set; } = "21m00Tcm4TlvDq8ikWAM";
+        public bool TTSEnabled { get; set; } = true;
+        public bool STTEnabled { get; set; } = true;
+    }
+
+    public class SecurityFileSettings
+    {
+        public bool RequireLogin { get; set; } = true;
+        public bool RequireSecurityCode { get; set; } = true;
+        public int SecurityCodeTimeout { get; set; } = 60;
+        public int AutoLockMinutes { get; set; } = 15;
+    }
+
+    public class DictationFileSettings
+    {
+        public bool AutoDetect { get; set; } = false;
+        public bool AutoPunctuation { get; set; } = true;
+        public bool AutoCapitalization { get; set; } = true;
+        public bool TargetWord { get; set; } = false;
+        public bool TargetNotepad { get; set; } = false;
+        public bool TargetVSCode { get; set; } = false;
+    }
+
+    public class AppearanceFileSettings
+    {
+        public string Theme { get; set; } = "System";
+        public bool AlwaysOnTop { get; set; } = false;
+        public bool MinimizeToTray { get; set; } = false;
+        public bool StartMinimized { get; set; } = false;
+        public double Opacity { get; set; } = 1.0;
+        public bool ShowToast { get; set; } = true;
+        public bool PlaySounds { get; set; } = true;
+    }
+
+    public class DatabaseFileSettings
+    {
+        public int HistoryRetentionDays { get; set; } = 30;
+    }
 }

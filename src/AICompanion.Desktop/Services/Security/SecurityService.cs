@@ -140,28 +140,44 @@ namespace AICompanion.Desktop.Services.Security
         }
 
         /// <summary>
-        /// Authenticate user - returns result with success flag and error message
+        /// Authenticate user - returns result with success flag and error message.
+        /// All authentication flows through the database. No hardcoded credentials.
         /// </summary>
         public async Task<AuthResult> AuthenticateAsync(string username, string password)
         {
-            // DEVELOPMENT/DEFAULT LOGIN - always allow admin/admin
-            if (username.ToLowerInvariant() == "admin" && password == "admin")
-            {
-                _currentUserId = 1;
-                _currentUsername = "admin";
-                _lastActivityTime = DateTime.UtcNow;
-                _currentSessionId = Guid.NewGuid().ToString();
-                _logger?.LogInformation("[Security] Admin login successful (default credentials)");
-                return new AuthResult { Success = true };
-            }
+            // Ensure default admin exists on first launch
+            await EnsureDefaultUserAsync();
 
-            // Try database login
+            // All auth goes through database
             var success = await LoginAsync(username, password);
             return new AuthResult
             {
                 Success = success,
-                ErrorMessage = success ? null : "Invalid username or password. Use admin/admin for development."
+                ErrorMessage = success ? null : "Invalid username or password."
             };
+        }
+
+        /// <summary>
+        /// On first launch, seeds a default admin account with a properly hashed password.
+        /// This runs only once — subsequent launches skip if the user already exists.
+        /// </summary>
+        private async Task EnsureDefaultUserAsync()
+        {
+            try
+            {
+                var existing = await _database.GetUserAsync("admin");
+                if (existing == null)
+                {
+                    var salt = GenerateSalt();
+                    var passwordHash = HashPassword("admin", salt);
+                    await _database.CreateUserAsync("admin", passwordHash, salt);
+                    _logger?.LogInformation("[Security] Default admin account seeded into database");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "[Security] Failed to seed default admin account");
+            }
         }
 
         /// <summary>
