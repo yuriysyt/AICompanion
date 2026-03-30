@@ -79,13 +79,22 @@ namespace AICompanion.Desktop.Services
             (new Regex(@"(?:stop tutorial|end tutorial|exit tutorial|закончить обучение)", RegexOptions.IgnoreCase), "tutorial_stop"),
             (new Regex(@"(?:skip|skip this|next step|пропустить)",                      RegexOptions.IgnoreCase), "tutorial_skip"),
             (new Regex(@"(?:give me a hint|hint|подсказка)",                            RegexOptions.IgnoreCase), "tutorial_hint"),
+            // "create word document named X" → named .docx in Documents
+            (new Regex(@"^create\s+(?:a\s+)?(?:new\s+)?word\s+document\s+named\s+(.+?)\s*$", RegexOptions.IgnoreCase), "named_doc_word"),
             // Write AI content into Word (explicit "in word" target)
             (new Regex(@"^write\s+(?:(?:an?\s+)?essay\s+)?(?:about\s+)?(.+?)\s+(?:in(?:to)?|to)\s+(?:word|ворд)\s*$", RegexOptions.IgnoreCase), "write_word"),
             // Write AI-generated content to a new notebook file
             // Matches: "write essay about Baku in notebook", "write about AI in notepad", etc.
             (new Regex(@"^write\s+(?:(?:an?\s+)?essay\s+)?(?:about\s+)?(.+?)\s+(?:in(?:to)?|to)\s+(?:notebook|notepad|note\s*(?:file|book)|блокнот)\s*$", RegexOptions.IgnoreCase), "write_notebook"),
-            // "write essay about X" with no explicit target → context-aware dispatch
-            (new Regex(@"^write\s+(?:(?:an?\s+)?essay\s+)?about\s+(.+?)\s*$", RegexOptions.IgnoreCase), "write_ctx"),
+            // "write [essay/information/content] about X [in English]?" → context-aware dispatch
+            (new Regex(@"^write\s+(?:(?:an?\s+)?(?:essay|information|info|content|text|article)\s+)?about\s+(.+?)(?:\s+in\s+english|\s+in\s+russian|\s+на\s+английском|\s+по-русски)?\s*$", RegexOptions.IgnoreCase), "write_ctx"),
+            // Word text-editing commands (operate on _currentDocPath)
+            (new Regex(@"^delete\s+text\s+(.+?)\s*$", RegexOptions.IgnoreCase), "doc_delete_text"),
+            (new Regex(@"^replace\s+(.+?)\s+with\s+(.+?)\s*$", RegexOptions.IgnoreCase), "doc_replace"),
+            (new Regex(@"^(?:center\s+title|center\s+heading)\s*$", RegexOptions.IgnoreCase), "doc_center_title"),
+            (new Regex(@"^make\s+bold\s+(.+?)\s*$", RegexOptions.IgnoreCase), "doc_make_bold"),
+            (new Regex(@"^format\s+paragraph\s+(\d+)\s+as\s+heading\s*$", RegexOptions.IgnoreCase), "doc_format_heading"),
+            (new Regex(@"^delete\s+paragraph\s+(\d+)\s*$", RegexOptions.IgnoreCase), "doc_delete_para"),
             // Explicit Word document creation
             (new Regex(@"^(?:create\s+(?:a\s+)?new\s+|new\s+)(?:word|ворд)\s+(?:document|file|doc|page|файл|документ)", RegexOptions.IgnoreCase), "new_doc_word"),
             // Explicit Notepad/notebook creation
@@ -337,6 +346,10 @@ namespace AICompanion.Desktop.Services
                 Regex.IsMatch(lower, @"^(?:найди|поиск|search|find|google|гугли)\s+"))
                 return false;
 
+            // Named document creation is single-intent regardless of word count
+            if (Regex.IsMatch(lower, @"^create\s+(?:a\s+)?(?:new\s+)?word\s+document\s+named\s+.+$"))
+                return false;
+
             // Write-content commands are single-intent regardless of word count.
             if (Regex.IsMatch(lower,
                 @"^write\s+(?:(?:an?\s+)?essay\s+)?(?:about\s+)?.+\s+(?:in(?:to)?|to)\s+(?:notebook|notepad|note\s*(?:file|book)|блокнот)\s*$",
@@ -346,9 +359,14 @@ namespace AICompanion.Desktop.Services
                 @"^write\s+(?:(?:an?\s+)?essay\s+)?(?:about\s+)?.+\s+(?:in(?:to)?|to)\s+(?:word|ворд)\s*$",
                 RegexOptions.IgnoreCase))
                 return false;
-            if (Regex.IsMatch(lower,
-                @"^write\s+(?:(?:an?\s+)?essay\s+)?about\s+.+$",
-                RegexOptions.IgnoreCase))
+            // Broader write-about (covers "write information about X in English")
+            if (Regex.IsMatch(lower, @"^write\s+(?:\w+\s+)?about\s+.+$", RegexOptions.IgnoreCase))
+                return false;
+
+            // Doc editing commands are single-intent
+            if (Regex.IsMatch(lower, @"^replace\s+.+\s+with\s+.+$")) return false;
+            if (Regex.IsMatch(lower, @"^delete\s+(?:text|paragraph)\s+.+$")) return false;
+            if (Regex.IsMatch(lower, @"^(?:center\s+(?:title|heading)|make\s+bold\s+|format\s+paragraph\s+\d+)"))
                 return false;
 
             // New document/file creation is always a single-intent command regardless of
@@ -567,13 +585,20 @@ namespace AICompanion.Desktop.Services
                         "tutorial_stop"  => new CommandResult(true, "Stopping tutorial",  "TUTORIAL_STOP"),
                         "tutorial_skip"  => new CommandResult(true, "Skipping step",      "TUTORIAL_SKIP"),
                         "tutorial_hint"  => new CommandResult(true, "Hint requested",     "TUTORIAL_HINT"),
-                        "write_word"      => WriteContentToWordDocument(m.Groups[1].Value.Trim()),
-                        "write_notebook"  => WriteContentToNotebook(m.Groups[1].Value.Trim()),
-                        "write_ctx"       => WriteContextAware(m.Groups[1].Value.Trim()),
-                        "new_doc"         => ExecuteNewDocument(),
-                        "new_doc_word"    => ExecuteNewDocument("WINWORD"),
-                        "new_doc_notepad" => ExecuteNewDocument("notepad"),
-                        "new_doc_excel"   => ExecuteNewDocument("EXCEL"),
+                        "named_doc_word"    => CreateNamedWordDocument(m.Groups[1].Value.Trim()),
+                        "write_word"        => WriteContentToWordDocument(m.Groups[1].Value.Trim()),
+                        "write_notebook"    => WriteContentToNotebook(m.Groups[1].Value.Trim()),
+                        "write_ctx"         => WriteContextAware(m.Groups[1].Value.Trim()),
+                        "doc_delete_text"   => EditDocDeleteText(m.Groups[1].Value.Trim()),
+                        "doc_replace"       => EditDocReplace(m.Groups[1].Value.Trim(), m.Groups[2].Value.Trim()),
+                        "doc_center_title"  => EditDocCenterTitle(),
+                        "doc_make_bold"     => EditDocMakeBold(m.Groups[1].Value.Trim()),
+                        "doc_format_heading"=> EditDocFormatHeading(int.Parse(m.Groups[1].Value)),
+                        "doc_delete_para"   => EditDocDeleteParagraph(int.Parse(m.Groups[1].Value)),
+                        "new_doc"           => ExecuteNewDocument(),
+                        "new_doc_word"      => ExecuteNewDocument("WINWORD"),
+                        "new_doc_notepad"   => ExecuteNewDocument("notepad"),
+                        "new_doc_excel"     => ExecuteNewDocument("EXCEL"),
                         "calc_app"       => ExecuteCalculation(m.Groups[1].Value.Trim()),
                         "calc_type"      => ExecuteCalcType(m.Groups[1].Value.Trim()),
                         "math_expr"      => EvalMath(m.Groups[1].Value.Trim()),
@@ -851,23 +876,27 @@ namespace AICompanion.Desktop.Services
             }
         }
 
-        /// <summary>
-        /// Creates a minimal but valid blank .docx in the user's Documents folder.
-        /// Uses System.IO.Packaging (WindowsBase) — no extra NuGet dependencies.
-        /// </summary>
+        /// <summary>Creates a minimal valid blank .docx in ~/Documents with a timestamped name.</summary>
         private static string CreateBlankDocxFile()
         {
             var dir  = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
             var path = System.IO.Path.Combine(dir, $"doc_{DateTime.Now:yyyyMMdd_HHmmss}.docx");
+            CreateBlankDocxAtPath(path);
+            return path;
+        }
 
+        /// <summary>
+        /// Writes a minimal valid blank .docx to any path.
+        /// Uses System.IO.Packaging (WindowsBase) — no extra NuGet dependencies.
+        /// </summary>
+        private static void CreateBlankDocxAtPath(string path)
+        {
             const string docRelType      = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
             const string docContentType  = "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml";
             const string settingsRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings";
             const string settingsCT      = "application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml";
 
             using var pkg = Package.Open(path, FileMode.Create, FileAccess.ReadWrite);
-
-            // ── word/document.xml ────────────────────────────────────────────────
             var docUri  = PackUriHelper.CreatePartUri(new Uri("word/document.xml", UriKind.Relative));
             var docPart = pkg.CreatePart(docUri, docContentType, CompressionOption.Normal);
             using (var sw = new StreamWriter(docPart.GetStream(FileMode.Create, FileAccess.Write)))
@@ -877,7 +906,6 @@ namespace AICompanion.Desktop.Services
                     "<w:body><w:p><w:pPr><w:jc w:val=\"left\"/></w:pPr></w:p>" +
                     "<w:sectPr><w:pgSz w:w=\"12240\" w:h=\"15840\"/></w:sectPr></w:body></w:document>");
 
-            // ── word/settings.xml (required by Word to suppress repair prompt) ──
             var setUri  = PackUriHelper.CreatePartUri(new Uri("word/settings.xml", UriKind.Relative));
             var setPart = pkg.CreatePart(setUri, settingsCT, CompressionOption.Normal);
             using (var sw = new StreamWriter(setPart.GetStream(FileMode.Create, FileAccess.Write)))
@@ -885,15 +913,50 @@ namespace AICompanion.Desktop.Services
                     "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>" +
                     "<w:settings xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"/>");
 
-            // ── word/_rels/document.xml.rels ────────────────────────────────────
             docPart.CreateRelationship(
                 PackUriHelper.CreatePartUri(new Uri("settings.xml", UriKind.Relative)),
                 TargetMode.Internal, settingsRelType, "rId1");
-
-            // ── package relationship (_rels/.rels) ──────────────────────────────
             pkg.CreateRelationship(docUri, TargetMode.Internal, docRelType, "rId1");
+        }
 
-            return path;
+        /// <summary>
+        /// Creates ~/Documents/{name}.docx, sets it as the current document context,
+        /// and opens it in Word. Subsequent "write about X" commands will write into it.
+        /// </summary>
+        private CommandResult CreateNamedWordDocument(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return new CommandResult(false, "No name specified", "Please specify a document name.");
+
+            var safeName = Regex.Replace(name.Trim(), @"[<>:""/\\|?*]", "_");
+            if (!safeName.EndsWith(".docx", StringComparison.OrdinalIgnoreCase))
+                safeName += ".docx";
+
+            var dir  = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            var path = System.IO.Path.Combine(dir, safeName);
+
+            try
+            {
+                CreateBlankDocxAtPath(path);
+                SysProcess.Start(new ProcessStartInfo
+                {
+                    FileName        = "WINWORD.EXE",
+                    Arguments       = $"\"{path}\"",
+                    UseShellExecute = true,
+                });
+                _lastOpenedApp  = "Microsoft Word";
+                _currentContext = AppContext.Word;
+                _currentDocPath = path;
+                _logger?.LogInformation("[CMD] named_doc: Created '{Path}'", path);
+                return new CommandResult(true, $"Created {safeName}",
+                    $"Created {safeName} and opened it in Word. You can now say 'write about [topic]' to fill it with content!");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "named_doc: Failed for '{Name}'", name);
+                return new CommandResult(false, $"Could not create {safeName}: {ex.Message}",
+                    "Sorry, I couldn't create that document.");
+            }
         }
 
         /// <summary>
@@ -953,21 +1016,135 @@ namespace AICompanion.Desktop.Services
         // ── Context-aware write dispatch ─────────────────────────────────────────
 
         /// <summary>
-        /// Dispatches "write essay about X" to the correct handler based on the
-        /// current active context (Word / Notepad). If no context is set, returns
-        /// a clarification prompt instead of silently doing nothing.
+        /// Dispatches "write [content] about X" to the correct handler.
+        /// If a named document path is set, writes into that existing file.
+        /// Otherwise creates a new timestamped file.
         /// </summary>
         private CommandResult WriteContextAware(string topic)
         {
-            _logger?.LogInformation("[WRITE-CTX] Context={Ctx}  Topic='{Topic}'", _currentContext, topic);
+            _logger?.LogInformation("[WRITE-CTX] Context={Ctx}  DocPath='{Path}'  Topic='{Topic}'",
+                _currentContext, _currentDocPath, topic);
+
             return _currentContext switch
             {
-                AppContext.Word    => WriteContentToWordDocument(topic),
-                AppContext.Notepad => WriteContentToNotebook(topic),
+                AppContext.Word when !string.IsNullOrEmpty(_currentDocPath) && File.Exists(_currentDocPath)
+                    => WriteContentToExistingDoc(_currentDocPath, topic),
+                AppContext.Word
+                    => WriteContentToWordDocument(topic),
+                AppContext.Notepad when !string.IsNullOrEmpty(_currentDocPath) && File.Exists(_currentDocPath)
+                    => WriteContentToExistingTxt(_currentDocPath, topic),
+                AppContext.Notepad
+                    => WriteContentToNotebook(topic),
                 _ => new CommandResult(false,
                     "No active document context",
                     "Where should I write? Say 'write essay about [topic] in word' or 'write essay about [topic] in notebook'.")
             };
+        }
+
+        /// <summary>
+        /// Kills Word, overwrites the XML content of an existing .docx with Granite-generated
+        /// text about <paramref name="topic"/>, then reopens the file in Word.
+        /// </summary>
+        private CommandResult WriteContentToExistingDoc(string docPath, string topic)
+        {
+            if (!File.Exists(docPath)) return WriteContentToWordDocument(topic);
+
+            var prompt = $"Write a detailed, well-structured 3-paragraph essay about {topic}. " +
+                         "Be informative, engaging, and specific.";
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    _logger?.LogInformation("[WORD-WRITE] Writing to existing '{Path}' about '{Topic}'",
+                        docPath, topic);
+                    var essay = await ChatAsync(prompt);
+                    if (string.IsNullOrWhiteSpace(essay)) return;
+
+                    // Kill Word to release the file lock before we write
+                    foreach (var p in SysProcess.GetProcessesByName("WINWORD"))
+                        try { p.Kill(); } catch { }
+                    await System.Threading.Tasks.Task.Delay(900);
+
+                    // Build paragraph XML
+                    var paragraphs = new StringBuilder();
+                    foreach (var line in essay.Split('\n'))
+                    {
+                        var text = line.Trim();
+                        if (!string.IsNullOrEmpty(text))
+                            paragraphs.Append(
+                                "<w:p><w:r><w:rPr/><w:t xml:space=\"preserve\">" +
+                                XmlEscape(text) +
+                                "</w:t></w:r></w:p>");
+                    }
+                    if (paragraphs.Length == 0) paragraphs.Append("<w:p/>");
+
+                    using (var pkg = Package.Open(docPath, FileMode.Open, FileAccess.ReadWrite))
+                    {
+                        var docUri  = PackUriHelper.CreatePartUri(new Uri("word/document.xml", UriKind.Relative));
+                        var docPart = pkg.GetPart(docUri);
+                        using var sw = new StreamWriter(docPart.GetStream(FileMode.Create, FileAccess.Write));
+                        sw.Write(
+                            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>" +
+                            "<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">" +
+                            "<w:body>" + paragraphs +
+                            "<w:sectPr><w:pgSz w:w=\"12240\" w:h=\"15840\"/></w:sectPr>" +
+                            "</w:body></w:document>");
+                    }
+
+                    _currentDocPath = docPath;
+                    _currentContext = AppContext.Word;
+                    _lastOpenedApp  = "Microsoft Word";
+                    _logger?.LogInformation("[WORD-WRITE] Essay written ({Bytes} bytes)", new FileInfo(docPath).Length);
+
+                    SysProcess.Start(new ProcessStartInfo
+                    {
+                        FileName = "WINWORD.EXE", Arguments = $"\"{docPath}\"", UseShellExecute = true
+                    });
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "[WORD-WRITE] Failed for topic '{Topic}'", topic);
+                }
+            });
+
+            return new CommandResult(true,
+                $"Writing content about \"{topic}\" into {Path.GetFileName(docPath)}...",
+                $"I'm writing about {topic}. Word will reopen with the content in a few seconds!");
+        }
+
+        /// <summary>Overwrites an existing .txt file with Granite content and reopens Notepad.</summary>
+        private CommandResult WriteContentToExistingTxt(string txtPath, string topic)
+        {
+            var prompt = $"Write a detailed, well-structured 3-paragraph essay about {topic}. " +
+                         "Be informative, engaging, and specific.";
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var essay = await ChatAsync(prompt);
+                    if (string.IsNullOrWhiteSpace(essay)) return;
+
+                    foreach (var p in SysProcess.GetProcessesByName("notepad"))
+                        try { p.Kill(); } catch { }
+                    await System.Threading.Tasks.Task.Delay(500);
+
+                    await File.WriteAllTextAsync(txtPath, essay, Encoding.UTF8);
+                    SysProcess.Start(new ProcessStartInfo
+                    {
+                        FileName = "notepad.exe", Arguments = $"\"{txtPath}\"", UseShellExecute = true
+                    });
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "[TXT-WRITE] Failed for topic '{Topic}'", topic);
+                }
+            });
+
+            return new CommandResult(true,
+                $"Writing content about \"{topic}\" into {Path.GetFileName(txtPath)}...",
+                $"Writing about {topic} in Notepad...");
         }
 
         /// <summary>
@@ -1078,6 +1255,189 @@ namespace AICompanion.Desktop.Services
             pkg.CreateRelationship(docUri, TargetMode.Internal, docRelType, "rId1");
 
             return path;
+        }
+
+        // ── Word document XML editing ────────────────────────────────────────────
+
+        /// <summary>
+        /// Generic helper: kills Word, opens _currentDocPath, runs transformXml on document.xml,
+        /// saves back, reopens Word. Returns null from transformXml to signal "no change found".
+        /// </summary>
+        private CommandResult EditCurrentDoc(Func<string, string?> transformXml, string successMsg, string speechMsg)
+        {
+            if (string.IsNullOrEmpty(_currentDocPath) || !File.Exists(_currentDocPath))
+                return new CommandResult(false, "No document to edit",
+                    "Please create or open a document first, then try again.");
+
+            foreach (var p in SysProcess.GetProcessesByName("WINWORD"))
+                try { p.Kill(); } catch { }
+            System.Threading.Thread.Sleep(900);
+
+            try
+            {
+                string oldXml;
+                using (var pkg = Package.Open(_currentDocPath, FileMode.Open, FileAccess.Read))
+                {
+                    var docUri = PackUriHelper.CreatePartUri(new Uri("word/document.xml", UriKind.Relative));
+                    using var sr = new StreamReader(pkg.GetPart(docUri).GetStream());
+                    oldXml = sr.ReadToEnd();
+                }
+
+                var newXml = transformXml(oldXml);
+                if (newXml == null)
+                    return new CommandResult(false, "Edit not applied",
+                        "I couldn't find the specified text in the document.");
+
+                using (var pkg = Package.Open(_currentDocPath, FileMode.Open, FileAccess.ReadWrite))
+                {
+                    var docUri  = PackUriHelper.CreatePartUri(new Uri("word/document.xml", UriKind.Relative));
+                    var docPart = pkg.GetPart(docUri);
+                    using var sw = new StreamWriter(docPart.GetStream(FileMode.Create, FileAccess.Write));
+                    sw.Write(newXml);
+                }
+
+                SysProcess.Start(new ProcessStartInfo
+                {
+                    FileName = "WINWORD.EXE", Arguments = $"\"{_currentDocPath}\"", UseShellExecute = true
+                });
+
+                return new CommandResult(true, successMsg, speechMsg);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "[DOC-EDIT] Failed");
+                return new CommandResult(false, $"Edit failed: {ex.Message}", "Sorry, I couldn't edit the document.");
+            }
+        }
+
+        private CommandResult EditDocDeleteText(string phrase)
+        {
+            return EditCurrentDoc(xml =>
+            {
+                var escaped = XmlEscape(phrase);
+                // Try XML-escaped form first, then raw
+                bool found = xml.Contains(escaped, StringComparison.OrdinalIgnoreCase) ||
+                             xml.Contains(phrase,  StringComparison.OrdinalIgnoreCase);
+                if (!found) return null;
+                var result = Regex.Replace(xml,
+                    @"(<w:t[^>]*>)(.*?)(</w:t>)",
+                    m => m.Groups[1].Value +
+                         m.Groups[2].Value.Replace(escaped, "", StringComparison.OrdinalIgnoreCase)
+                                         .Replace(phrase,   "", StringComparison.OrdinalIgnoreCase) +
+                         m.Groups[3].Value,
+                    RegexOptions.Singleline);
+                return result == xml ? null : result;
+            }, $"Deleted '{phrase}' from document", $"Done! I've removed '{phrase}' from the document.");
+        }
+
+        private CommandResult EditDocReplace(string oldText, string newText)
+        {
+            return EditCurrentDoc(xml =>
+            {
+                var escapedOld = XmlEscape(oldText);
+                var escapedNew = XmlEscape(newText);
+                bool found = xml.Contains(escapedOld, StringComparison.OrdinalIgnoreCase) ||
+                             xml.Contains(oldText,    StringComparison.OrdinalIgnoreCase);
+                if (!found) return null;
+                var result = Regex.Replace(xml,
+                    @"(<w:t[^>]*>)(.*?)(</w:t>)",
+                    m => m.Groups[1].Value +
+                         Regex.Replace(m.Groups[2].Value,
+                             Regex.Escape(escapedOld), escapedNew, RegexOptions.IgnoreCase) +
+                         m.Groups[3].Value,
+                    RegexOptions.Singleline);
+                return result == xml ? null : result;
+            }, $"Replaced '{oldText}' with '{newText}'",
+               $"Done! '{oldText}' has been replaced with '{newText}' throughout the document.");
+        }
+
+        private CommandResult EditDocCenterTitle()
+        {
+            return EditCurrentDoc(xml =>
+            {
+                // Find first <w:p> and ensure its <w:pPr> contains <w:jc w:val="center"/>
+                var pPrMatch = Regex.Match(xml, @"<w:p>(<w:pPr>.*?</w:pPr>)", RegexOptions.Singleline);
+                string newXml;
+                if (pPrMatch.Success)
+                {
+                    var pPr    = pPrMatch.Groups[1].Value;
+                    var newPPr = Regex.Replace(pPr, @"<w:jc[^/]*/?>", "") +
+                                 "<w:jc w:val=\"center\"/>";
+                    newPPr = "<w:pPr>" + newPPr.Replace("<w:pPr>", "").Replace("</w:pPr>", "") + "</w:pPr>";
+                    newXml = xml.Replace(pPrMatch.Groups[1].Value, newPPr);
+                }
+                else
+                {
+                    // No pPr on first para — insert one
+                    newXml = Regex.Replace(xml, @"<w:p>(?!.*<w:p>)",
+                        "<w:p><w:pPr><w:jc w:val=\"center\"/></w:pPr>", RegexOptions.Singleline);
+                }
+                return newXml == xml ? null : newXml;
+            }, "Title centered", "The first paragraph is now centered.");
+        }
+
+        private CommandResult EditDocMakeBold(string phrase)
+        {
+            return EditCurrentDoc(xml =>
+            {
+                var escaped = XmlEscape(phrase);
+                // Inject <w:b/> into <w:rPr> of runs containing the phrase
+                var result = Regex.Replace(xml,
+                    @"(<w:r>)(<w:rPr>)(.*?)(</w:rPr>)(.*?<w:t[^>]*>)(.*?)(</w:t>)",
+                    m =>
+                    {
+                        var tText = m.Groups[6].Value;
+                        if (!tText.Contains(escaped, StringComparison.OrdinalIgnoreCase) &&
+                            !tText.Contains(phrase,   StringComparison.OrdinalIgnoreCase))
+                            return m.Value;
+                        var rPrContent = m.Groups[3].Value;
+                        if (!rPrContent.Contains("<w:b/>") && !rPrContent.Contains("<w:b "))
+                            rPrContent = "<w:b/>" + rPrContent;
+                        return m.Groups[1].Value + m.Groups[2].Value + rPrContent +
+                               m.Groups[4].Value + m.Groups[5].Value + tText + m.Groups[7].Value;
+                    },
+                    RegexOptions.Singleline);
+                return result == xml ? null : result;
+            }, $"Made '{phrase}' bold", $"'{phrase}' is now bold in the document.");
+        }
+
+        private CommandResult EditDocFormatHeading(int n)
+        {
+            return EditCurrentDoc(xml =>
+            {
+                // Find all <w:p>...</w:p> blocks and modify the nth one
+                var paras = Regex.Matches(xml, @"<w:p>.*?</w:p>", RegexOptions.Singleline);
+                if (n < 1 || n > paras.Count) return null;
+                var para    = paras[n - 1].Value;
+                string newPara;
+                var pPrMatch = Regex.Match(para, @"<w:pPr>.*?</w:pPr>", RegexOptions.Singleline);
+                if (pPrMatch.Success)
+                {
+                    var pPr    = pPrMatch.Value;
+                    var newPPr = Regex.Replace(pPr, @"<w:pStyle[^/]*/?>", "");
+                    newPPr = newPPr.Replace("<w:pPr>", "<w:pPr><w:pStyle w:val=\"Heading1\"/>");
+                    newPara = para.Replace(pPrMatch.Value, newPPr);
+                }
+                else
+                {
+                    newPara = para.Replace("<w:p>", "<w:p><w:pPr><w:pStyle w:val=\"Heading1\"/></w:pPr>");
+                }
+                return xml.Substring(0, paras[n - 1].Index) + newPara +
+                       xml.Substring(paras[n - 1].Index + paras[n - 1].Length);
+            }, $"Paragraph {n} formatted as Heading 1",
+               $"Paragraph {n} is now formatted as a Heading 1.");
+        }
+
+        private CommandResult EditDocDeleteParagraph(int n)
+        {
+            return EditCurrentDoc(xml =>
+            {
+                var paras = Regex.Matches(xml, @"<w:p>.*?</w:p>", RegexOptions.Singleline);
+                if (n < 1 || n > paras.Count) return null;
+                return xml.Substring(0, paras[n - 1].Index) +
+                       xml.Substring(paras[n - 1].Index + paras[n - 1].Length);
+            }, $"Paragraph {n} deleted",
+               $"Paragraph {n} has been removed from the document.");
         }
 
         private static string XmlEscape(string text) =>
