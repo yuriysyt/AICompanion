@@ -1,0 +1,189 @@
+# AICompanion Full Codebase Rewrite - Master Prompt
+
+## YOUR ROLE
+You are a senior software engineer performing a thorough code review, bug fix, and rewrite of the AICompanion project. Think step by step. Before making any change, READ the existing code first to understand what's already fixed vs what still needs work. Do NOT blindly rewrite files that already contain correct fixes. Verify each fix by reading the current state of the code.
+
+## IMPORTANT: Some fixes may already be applied
+Previous sessions have already fixed several of these bugs. Before changing any file:
+1. READ the file first
+2. Check if the fix described below is already in place
+3. Only modify what's still broken
+4. If a fix is already applied, move on to the next task
+
+## Context and Current State
+
+You are working on AICompanion - a WPF voice-controlled desktop assistant for Windows that uses:
+- **IBM Granite** (via Ollama on localhost:11434) for AI planning and text generation
+- **ElevenLabs** for Speech-to-Text (STT) and Text-to-Speech (TTS)
+- **OpenClaw-inspired agentic architecture** for multi-step command execution via Win32 APIs
+
+The codebase is at `C:\Users\yyurc\Desktop\IBM PROJECT\AICompanion\`. The project structure:
+```
+src/AICompanion.Desktop/          # WPF .NET 8 app
+  Services/
+    LocalCommandProcessor.cs      # Voice command routing
+    Automation/
+      AgenticExecutionService.cs  # Multi-step plan executor
+      WindowAutomationHelper.cs   # Win32 window control
+    Voice/
+      ElevenLabsSpeechService.cs  # STT/TTS
+  Views/
+    MainWindow.xaml/.cs           # Main UI
+    LoginWindow.xaml/.cs          # Login (disable for now)
+backend/
+  server.py                       # Python FastAPI + Granite
+tests/AICompanion.IntegrationTests/
+```
+
+## CRITICAL BUGS TO FIX (from real user testing with screenshots)
+
+These bugs were observed by running the actual EXE and giving voice commands:
+
+### Bug 1: Text never appears in target documents
+**Symptom**: User says "write essay about weather" or "type Hello World in Word". Activity log shows "Plan completed: 2 steps in 12559ms" but the document remains EMPTY.
+**Root Cause**:
+- `ActionStepDto` in C# had `[JsonPropertyName("parameters")]` mapping to a `Dictionary<string, JsonElement>` but Python sends `"params"` as a **string**. The params field silently deserializes as null.
+- `ExecuteTypeText()` reads `step.Target` (which is the window name) instead of `step.Params` (which is the actual text to type).
+- `TypeTextIntoWindowAsync()` uses `SendKeys.SendWait()` which breaks on Russian keyboard layout and with Unicode/long text.
+
+**Fix**:
+1. Add `[JsonPropertyName("params")] public string? Params { get; set; }` to `ActionStepDto`
+2. In `ExecuteTypeText()`: use `step.Params ?? step.Target` for the text content
+3. Replace `SendKeys.SendWait(text)` with clipboard paste: `Clipboard.SetText(text)` on STA thread + `SendKeys.SendWait("^v")`
+
+### Bug 2: "Open browser" / "Open Word" opens Notepad instead
+**Symptom**: Any command mentioning an app opens Notepad. User says "Search weather in Opera" but Notepad opens. User says "Open Word and create document" but Notepad opens.
+**Root Cause**: In `server.py` `/api/smart_command` endpoint, line 509 has:
+```python
+app_target = "notepad" if use_notepad else "notepad"  # BOTH BRANCHES IDENTICAL!
+```
+Also, `PLAN_PROMPT` lacks explicit app-name mapping examples, so Granite often guesses wrong.
+
+**Fix**:
+1. Create `_detect_target_app(text)` function that maps "word"/"browser"/"chrome"/"opera"/"excel" to correct process names
+2. Add explicit app mapping examples to PLAN_PROMPT
+3. Improve `_fallback_plan()` with correct keyword-to-process mapping
+
+### Bug 3: Notepad button opens duplicate windows
+**Symptom**: Clicking "Notepad" Quick Command button always launches a NEW notepad.exe even if one is already open.
+**Root Cause**: `QuickCommand_Click` in `MainWindow.xaml.cs` calls `Process.Start()` directly without checking for existing windows. Similarly `LocalCommandProcessor.ExecuteOpenApp()` does the same.
+
+**Fix**: Add `FindRunningWindow(processName)` that uses `EnumWindows` + `GetWindowThreadProcessId` to find existing windows. Focus existing window with `ShowWindow(SW_RESTORE)` + `SetForegroundWindow()`.
+
+### Bug 4: Essay writes filename into Notepad title bar instead of document body
+**Symptom**: Screenshots show "notepad" text appearing in the title/tab area of Notepad, and a Save-As dialog appearing with "notepad" as filename. The essay text is not in the document.
+**Root Cause**: The app types the process name "notepad" into whatever is focused (including Save As dialogs) because `step.Target` = "notepad" is used as the text to type instead of `step.Params` = actual essay text.
+
+### Bug 5: "Write essay" plan says completed but nothing typed
+**Symptom**: Activity log shows "Plan completed: 2 steps" but document is empty.
+**Root Cause**: The essay content is generated by Python and placed in `step.params` (JSON string), but C# `ActionStepDto.Parameters` is a `Dictionary<string, JsonElement>` mapped to `"parameters"`. JSON key mismatch means the text is silently dropped.
+
+### Bug 6: Opens second Notepad/Word when told to write in existing one
+**Symptom**: User has Notepad open, says "write in notebook" but another Notepad window opens.
+**Root Cause**: `AgenticExecutionService._planTargetWindow` is reset between commands (tracking lost). Also `ExecuteOpenApp` in the agent DOES check for existing windows correctly, but the `LocalCommandProcessor` quick path does NOT.
+
+## WHAT NEEDS TO HAPPEN
+
+### Phase 1: Fix the core execution pipeline
+1. Fix `ActionStepDto` to deserialize `"params"` string from Python
+2. Fix `ExecuteTypeText` to use `Params` field
+3. Replace `SendKeys` text typing with clipboard paste (Ctrl+V) in `WindowAutomationHelper`
+4. Fix `smart_command` endpoint to detect correct target app
+5. Fix `QuickCommand_Click` to reuse existing windows
+6. Fix `LocalCommandProcessor.ExecuteOpenApp` to reuse existing windows
+7. Add better PLAN_PROMPT examples with correct app names
+
+### Phase 2: Clean up legacy code
+- Remove authentication/login code (LoginWindow) - not needed for demo
+- Remove unused test files that just launch 348 apps without verification
+- Clean up comments and dead code
+- Ensure all paths use the fixed clipboard paste method
+
+### Phase 3: Write REAL tests that verify actual behavior
+Tests must verify what happens INSIDE the app, not just that a window opened:
+- Open Notepad + type text + read back content + verify it matches
+- Open Word + type essay + verify text appeared
+- "Open browser" actually opens Edge/Chrome, NOT Notepad
+- "Search weather" opens browser with search URL
+- ElevenLabs STT API key is valid and service responds
+- Granite model responds with actual content
+- Quick buttons don't create duplicate windows
+- Context preserved: command 1 opens Notepad, command 2 types into SAME Notepad
+
+### Phase 4: Integration verification
+- Run EXE, give voice command, take screenshot, verify result
+- Ensure experience matches what tests verify
+- Test error scenarios: Ollama down, ElevenLabs timeout, wrong app name
+
+## FILES TO MODIFY
+
+| File | What to do |
+|------|-----------|
+| `src/.../Automation/AgenticExecutionService.cs` | Fix `ActionStepDto` (add `Params` field), fix `ExecuteTypeText` to read `Params` |
+| `src/.../Automation/WindowAutomationHelper.cs` | Replace `SendKeys.SendWait(text)` with clipboard paste |
+| `src/.../Services/LocalCommandProcessor.cs` | Fix `ExecuteOpenApp` to check existing windows first |
+| `src/.../Views/MainWindow.xaml.cs` | Fix `QuickCommand_Click` to reuse existing windows |
+| `backend/server.py` | Fix `smart_command` app_target bug, improve PLAN_PROMPT, fix `_fallback_plan` |
+| `tests/.../RealAppTests/AppBehaviorTests.cs` | New comprehensive test suite |
+
+## KEY TECHNICAL NOTES
+
+- **Russian keyboard layout**: `SendKeys`/`VkKeyScan` breaks for Latin text. ALWAYS use clipboard + Ctrl+V for typing text.
+- **Win32 window management**: Use `EnumWindows` + `GetWindowThreadProcessId` to find windows by process, not title substring (avoids grabbing Telegram when title contains "AI").
+- **WPF buttons**: Not visible to `EnumChildWindows`. Use `System.Windows.Automation.AutomationElement.FromHandle()` for UI Automation.
+- **Win11 Notepad**: Text area starts at ~65% of window height (below toolbar/tab strip). Click there before pasting.
+- **appsettings.json**: Output build directory has DIFFERENT schema from source. Patch BOTH files for test configuration.
+
+## SCREENSHOT EVIDENCE OF CURRENT BUGS
+
+The screenshots show:
+1. User said "Search the weather in the Opera browser" - Activity Log shows it processed against Notepad window, typed "notepad" text into Notepad instead of opening Opera
+2. User said "Write essay in notebook about the weather" - Plan completed 2 steps in 12559ms but Notepad contains just "notepad" text. Downloads folder shows files named "notepad", "winword" being randomly created
+3. User said "Write an essay about the weather today" - A Save-As dialog opened with filename "notepad", typing filenames into save dialogs instead of content into documents
+4. User said "Write new essay in the notebook currently open" - Two empty Notepad windows appeared, nothing typed
+
+All these bugs stem from the same root causes documented above.
+
+## ACCEPTANCE CRITERIA (verify ALL of these pass)
+
+Run each verification and confirm it works:
+
+1. **Backend API tests** (curl commands):
+   - `POST /api/smart_command {"text":"open browser"}` -> steps contain `open_app` with target `msedge`, NOT `notepad`
+   - `POST /api/smart_command {"text":"type hello world in Word"}` -> steps contain `focus_window` target `winword` + `type_text` params `Hello World`
+   - `POST /api/smart_command {"text":"write essay about AI in notepad"}` -> `content_generated` field is non-empty (1000+ chars), `type_text` params contains actual essay
+   - `POST /api/smart_command {"text":"search weather London"}` -> steps contain `search_web` or `navigate_url`, NOT `open_app notepad`
+
+2. **Build**: `dotnet build tests/AICompanion.IntegrationTests/` succeeds with 0 errors
+
+3. **Integration tests** (dotnet test --filter AppBehaviorTests): All 7 tests pass:
+   - AB1: App launches without login
+   - AB2: Notepad button opens exactly one window
+   - AB3: Double-click Notepad button -> still one window (reuse)
+   - AB4: Essay generated by Granite, pasted into Notepad, content verified
+   - AB5: Second command uses same Notepad (no duplicate)
+   - AB6: ElevenLabs API key valid (HTTP 200)
+   - AB7: Close notepad command works
+
+4. **EXE manual verification**: Launch the EXE, take screenshots at each step, verify:
+   - Voice input "open notepad" opens one Notepad
+   - Voice input "write hello world" types text into Notepad (not into title bar, not into save dialog)
+   - Voice input "open browser" opens Edge/Chrome, NOT Notepad
+
+## CLEANUP TASKS
+
+Delete these broken/unused test files if they still exist:
+- `AgenticMultiStepTests.cs` - broken, opens 348 apps without verification
+- `BrowserIntegrationTests.cs` - broken, tests never pass
+- `BrowserPageBrowsingTests.cs` - broken
+- `CalculatorIntegrationTests.cs` - broken
+- `MessengerIntegrationTests.cs` - broken (Telegram not installed)
+- `RichDocumentEditingTests.cs` - broken
+- `NotepadIntegrationTests.cs` - broken, replaced by AppBehaviorTests
+
+Keep:
+- `AppBehaviorTests.cs` - working comprehensive tests
+- `AppExeE2ETests.cs` - EXE fixture
+- `AiResearchToNotepadTests.cs` - AI pipeline tests
+- `RealUserWorkflowTests.cs` - workflow tests
+- `BackendFixture.cs` / helpers

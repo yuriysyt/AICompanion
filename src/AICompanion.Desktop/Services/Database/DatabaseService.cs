@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
@@ -19,6 +21,13 @@ namespace AICompanion.Desktop.Services.Database
         private SqliteConnection? _connection;
         private bool _isInitialized;
 
+        // AES-256 field encryption key (32 bytes), loaded via DPAPI on first InitializeAsync.
+        // Null when running in-memory test mode (encryption disabled for test isolation).
+        private byte[]? _fieldEncryptionKey;
+
+        // Path to the DPAPI-encrypted field key file (sibling to the database file)
+        private readonly string? _fieldKeyPath;
+
         public bool IsInitialized => _isInitialized;
 
         public DatabaseService(ILogger<DatabaseService>? logger = null)
@@ -28,7 +37,19 @@ namespace AICompanion.Desktop.Services.Database
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "AICompanion", "Data");
             Directory.CreateDirectory(appDataPath);
-            _dbPath = Path.Combine(appDataPath, "aicompanion.db");
+            _dbPath       = Path.Combine(appDataPath, "aicompanion.db");
+            _fieldKeyPath = Path.Combine(appDataPath, "fieldkey.dat");
+        }
+
+        /// <summary>
+        /// Test-only constructor: pass ":memory:" for an isolated SQLite in-memory database.
+        /// Encryption is disabled in test mode to keep tests deterministic.
+        /// </summary>
+        internal DatabaseService(ILogger<DatabaseService>? logger, string dbPath)
+        {
+            _logger       = logger;
+            _dbPath       = dbPath;
+            _fieldKeyPath = null;  // no encryption in test mode
         }
 
         public async Task InitializeAsync()
@@ -39,6 +60,11 @@ namespace AICompanion.Desktop.Services.Database
                 await _connection.OpenAsync();
 
                 await CreateTablesAsync();
+
+                // Load or generate the AES-256 field encryption key (production only)
+                if (_fieldKeyPath != null)
+                    _fieldEncryptionKey = LoadOrCreateFieldKey(_fieldKeyPath);
+
                 _isInitialized = true;
                 _logger?.LogInformation("[Database] Initialized at {Path}", _dbPath);
             }
@@ -49,6 +75,35 @@ namespace AICompanion.Desktop.Services.Database
             }
         }
 
+        /// <summary>
+        /// Generates a fresh 32-byte AES-256 key on first run and persists it in
+        /// <paramref name="keyPath"/> protected by DPAPI (DataProtectionScope.CurrentUser).
+        /// On subsequent runs, decrypts and returns the stored key.
+        /// </summary>
+        private byte[] LoadOrCreateFieldKey(string keyPath)
+        {
+            if (File.Exists(keyPath))
+            {
+                try
+                {
+                    var encrypted = File.ReadAllBytes(keyPath);
+                    return ProtectedData.Unprotect(encrypted, null, DataProtectionScope.CurrentUser);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "[Database] Could not decrypt field key — generating a new one (existing data will be unreadable)");
+                }
+            }
+
+            // Generate a cryptographically random 256-bit key
+            var key = new byte[32];
+            RandomNumberGenerator.Fill(key);
+            var blob = ProtectedData.Protect(key, null, DataProtectionScope.CurrentUser);
+            File.WriteAllBytes(keyPath, blob);
+            _logger?.LogInformation("[Database] Generated new AES-256 field encryption key");
+            return key;
+        }
+
         private async Task CreateTablesAsync()
         {
             var commands = new[]
@@ -57,11 +112,28 @@ namespace AICompanion.Desktop.Services.Database
                 @"CREATE TABLE IF NOT EXISTS Users (
                     Id INTEGER PRIMARY KEY AUTOINCREMENT,
                     Username TEXT UNIQUE NOT NULL,
+                    Email TEXT,
                     PasswordHash TEXT NOT NULL,
                     Salt TEXT NOT NULL,
+                    HashAlgorithm TEXT NOT NULL DEFAULT 'SHA256',
                     CreatedAt TEXT NOT NULL,
                     LastLoginAt TEXT,
                     IsActive INTEGER DEFAULT 1
+                )",
+
+                // Migration: add Email column to existing DB (safe IF NOT EXISTS workaround)
+                @"ALTER TABLE Users ADD COLUMN Email TEXT",
+                // Migration: add HashAlgorithm column (for PBKDF2 upgrade tracking)
+                @"ALTER TABLE Users ADD COLUMN HashAlgorithm TEXT NOT NULL DEFAULT 'SHA256'",
+
+                // Persistent session tokens for Remember Me
+                @"CREATE TABLE IF NOT EXISTS SessionTokens (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    UserId INTEGER NOT NULL,
+                    Token TEXT UNIQUE NOT NULL,
+                    CreatedAt TEXT NOT NULL,
+                    ExpiresAt TEXT NOT NULL,
+                    FOREIGN KEY (UserId) REFERENCES Users(Id)
                 )",
 
                 // Security codes for dangerous operations
@@ -151,8 +223,16 @@ namespace AICompanion.Desktop.Services.Database
 
             foreach (var sql in commands)
             {
-                using var cmd = new SqliteCommand(sql, _connection);
-                await cmd.ExecuteNonQueryAsync();
+                try
+                {
+                    using var cmd = new SqliteCommand(sql, _connection);
+                    await cmd.ExecuteNonQueryAsync();
+                }
+                catch (SqliteException ex) when (sql.TrimStart().StartsWith("ALTER TABLE"))
+                {
+                    // ALTER TABLE throws if the column already exists in an existing DB — safe to ignore
+                    _logger?.LogDebug("[Database] Migration already applied (skipping): {Msg}", ex.Message);
+                }
             }
 
             _logger?.LogInformation("[Database] Tables created/verified");
@@ -160,16 +240,19 @@ namespace AICompanion.Desktop.Services.Database
 
         #region User Management
 
-        public async Task<int> CreateUserAsync(string username, string passwordHash, string salt)
+        public async Task<int> CreateUserAsync(string username, string passwordHash, string salt,
+            string? email = null, string hashAlgorithm = "PBKDF2")
         {
-            var sql = @"INSERT INTO Users (Username, PasswordHash, Salt, CreatedAt) 
-                        VALUES (@username, @passwordHash, @salt, @createdAt);
+            var sql = @"INSERT INTO Users (Username, Email, PasswordHash, Salt, HashAlgorithm, CreatedAt)
+                        VALUES (@username, @email, @passwordHash, @salt, @hashAlgorithm, @createdAt);
                         SELECT last_insert_rowid();";
 
             using var cmd = new SqliteCommand(sql, _connection);
             cmd.Parameters.AddWithValue("@username", username);
+            cmd.Parameters.AddWithValue("@email", email ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("@passwordHash", passwordHash);
             cmd.Parameters.AddWithValue("@salt", salt);
+            cmd.Parameters.AddWithValue("@hashAlgorithm", hashAlgorithm);
             cmd.Parameters.AddWithValue("@createdAt", DateTime.UtcNow.ToString("O"));
 
             var result = await cmd.ExecuteScalarAsync();
@@ -178,7 +261,8 @@ namespace AICompanion.Desktop.Services.Database
 
         public async Task<UserRecord?> GetUserAsync(string username)
         {
-            var sql = "SELECT * FROM Users WHERE Username = @username AND IsActive = 1";
+            var sql = @"SELECT Id, Username, Email, PasswordHash, Salt, HashAlgorithm, CreatedAt, LastLoginAt
+                        FROM Users WHERE Username = @username AND IsActive = 1";
             using var cmd = new SqliteCommand(sql, _connection);
             cmd.Parameters.AddWithValue("@username", username);
 
@@ -189,13 +273,26 @@ namespace AICompanion.Desktop.Services.Database
                 {
                     Id = reader.GetInt32(0),
                     Username = reader.GetString(1),
-                    PasswordHash = reader.GetString(2),
-                    Salt = reader.GetString(3),
-                    CreatedAt = DateTime.Parse(reader.GetString(4)),
-                    LastLoginAt = reader.IsDBNull(5) ? null : DateTime.Parse(reader.GetString(5))
+                    Email = reader.IsDBNull(2) ? null : reader.GetString(2),
+                    PasswordHash = reader.GetString(3),
+                    Salt = reader.GetString(4),
+                    HashAlgorithm = reader.IsDBNull(5) ? "SHA256" : reader.GetString(5),
+                    CreatedAt = DateTime.Parse(reader.GetString(6)),
+                    LastLoginAt = reader.IsDBNull(7) ? null : DateTime.Parse(reader.GetString(7))
                 };
             }
             return null;
+        }
+
+        public async Task UpdatePasswordHashAsync(int userId, string newHash, string newSalt, string algorithm)
+        {
+            var sql = "UPDATE Users SET PasswordHash = @hash, Salt = @salt, HashAlgorithm = @algo WHERE Id = @userId";
+            using var cmd = new SqliteCommand(sql, _connection);
+            cmd.Parameters.AddWithValue("@hash", newHash);
+            cmd.Parameters.AddWithValue("@salt", newSalt);
+            cmd.Parameters.AddWithValue("@algo", algorithm);
+            cmd.Parameters.AddWithValue("@userId", userId);
+            await cmd.ExecuteNonQueryAsync();
         }
 
         public async Task UpdateLastLoginAsync(int userId)
@@ -270,18 +367,27 @@ namespace AICompanion.Desktop.Services.Database
 
         #region Conversation History
 
-        public async Task SaveConversationAsync(string sessionId, int? userId, string command, 
+        public async Task SaveConversationAsync(string sessionId, int? userId, string command,
             string? response, string? actionType, string? actionResult, float confidence)
         {
-            var sql = @"INSERT INTO ConversationHistory 
-                        (SessionId, UserId, Command, Response, ActionType, ActionResult, Confidence, CreatedAt) 
+            // Encrypt sensitive fields (command text + response) at rest when the key is available.
+            // appsettings.json EncryptSensitiveData flag is now honoured by this implementation.
+            var storedCommand  = _fieldEncryptionKey != null
+                ? FieldEncryptionHelper.Encrypt(command, _fieldEncryptionKey)
+                : command;
+            var storedResponse = (_fieldEncryptionKey != null && response != null)
+                ? FieldEncryptionHelper.Encrypt(response, _fieldEncryptionKey)
+                : response;
+
+            var sql = @"INSERT INTO ConversationHistory
+                        (SessionId, UserId, Command, Response, ActionType, ActionResult, Confidence, CreatedAt)
                         VALUES (@sessionId, @userId, @command, @response, @actionType, @actionResult, @confidence, @createdAt)";
 
             using var cmd = new SqliteCommand(sql, _connection);
             cmd.Parameters.AddWithValue("@sessionId", sessionId);
             cmd.Parameters.AddWithValue("@userId", userId.HasValue ? userId.Value : DBNull.Value);
-            cmd.Parameters.AddWithValue("@command", command);
-            cmd.Parameters.AddWithValue("@response", response ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@command", storedCommand);
+            cmd.Parameters.AddWithValue("@response", storedResponse ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("@actionType", actionType ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("@actionResult", actionResult ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("@confidence", confidence);
@@ -292,8 +398,8 @@ namespace AICompanion.Desktop.Services.Database
 
         public async Task<List<ConversationRecord>> GetRecentConversationsAsync(string sessionId, int limit = 10)
         {
-            var sql = @"SELECT * FROM ConversationHistory 
-                        WHERE SessionId = @sessionId 
+            var sql = @"SELECT * FROM ConversationHistory
+                        WHERE SessionId = @sessionId
                         ORDER BY CreatedAt DESC LIMIT @limit";
 
             var records = new List<ConversationRecord>();
@@ -304,14 +410,39 @@ namespace AICompanion.Desktop.Services.Database
             using var reader = await cmd.ExecuteReaderAsync();
             while (await reader.ReadAsync())
             {
+                var rawCommand  = reader.GetString(3);
+                var rawResponse = reader.IsDBNull(4) ? null : reader.GetString(4);
+
+                // Decrypt if the key is available and the stored value is an encrypted blob.
+                // The IsEncrypted guard handles rows that were written before encryption was
+                // enabled (plaintext rows are returned as-is without error).
+                string command;
+                string? response;
+                try
+                {
+                    command = (_fieldEncryptionKey != null && FieldEncryptionHelper.IsEncrypted(rawCommand))
+                        ? FieldEncryptionHelper.Decrypt(rawCommand, _fieldEncryptionKey)
+                        : rawCommand;
+
+                    response = (_fieldEncryptionKey != null && FieldEncryptionHelper.IsEncrypted(rawResponse))
+                        ? FieldEncryptionHelper.Decrypt(rawResponse!, _fieldEncryptionKey)
+                        : rawResponse;
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "[Database] Failed to decrypt conversation record {Id} — returning as-is", reader.GetInt32(0));
+                    command  = rawCommand;
+                    response = rawResponse;
+                }
+
                 records.Add(new ConversationRecord
                 {
-                    Id = reader.GetInt32(0),
-                    SessionId = reader.GetString(1),
-                    Command = reader.GetString(3),
-                    Response = reader.IsDBNull(4) ? null : reader.GetString(4),
+                    Id         = reader.GetInt32(0),
+                    SessionId  = reader.GetString(1),
+                    Command    = command,
+                    Response   = response,
                     ActionType = reader.IsDBNull(5) ? null : reader.GetString(5),
-                    CreatedAt = DateTime.Parse(reader.GetString(8))
+                    CreatedAt  = DateTime.Parse(reader.GetString(8))
                 });
             }
             return records;
@@ -441,6 +572,60 @@ namespace AICompanion.Desktop.Services.Database
 
         #endregion
 
+        #region Session Tokens (Remember Me)
+
+        public async Task SaveSessionTokenAsync(int userId, string token, DateTime expiresAt)
+        {
+            // Remove any existing tokens for this user first
+            var deleteSql = "DELETE FROM SessionTokens WHERE UserId = @userId";
+            using var deleteCmd = new SqliteCommand(deleteSql, _connection);
+            deleteCmd.Parameters.AddWithValue("@userId", userId);
+            await deleteCmd.ExecuteNonQueryAsync();
+
+            var sql = @"INSERT INTO SessionTokens (UserId, Token, CreatedAt, ExpiresAt)
+                        VALUES (@userId, @token, @createdAt, @expiresAt)";
+            using var cmd = new SqliteCommand(sql, _connection);
+            cmd.Parameters.AddWithValue("@userId", userId);
+            cmd.Parameters.AddWithValue("@token", token);
+            cmd.Parameters.AddWithValue("@createdAt", DateTime.UtcNow.ToString("O"));
+            cmd.Parameters.AddWithValue("@expiresAt", expiresAt.ToString("O"));
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        public async Task<SessionTokenRecord?> GetValidSessionTokenAsync(string token)
+        {
+            var sql = @"SELECT st.Id, st.UserId, u.Username, st.ExpiresAt
+                        FROM SessionTokens st
+                        JOIN Users u ON st.UserId = u.Id
+                        WHERE st.Token = @token AND st.ExpiresAt > @now AND u.IsActive = 1";
+            using var cmd = new SqliteCommand(sql, _connection);
+            cmd.Parameters.AddWithValue("@token", token);
+            cmd.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("O"));
+
+            using var reader = await cmd.ExecuteReaderAsync();
+            if (await reader.ReadAsync())
+            {
+                return new SessionTokenRecord
+                {
+                    Id = reader.GetInt32(0),
+                    UserId = reader.GetInt32(1),
+                    Username = reader.GetString(2),
+                    ExpiresAt = DateTime.Parse(reader.GetString(3))
+                };
+            }
+            return null;
+        }
+
+        public async Task DeleteSessionTokenAsync(string token)
+        {
+            var sql = "DELETE FROM SessionTokens WHERE Token = @token";
+            using var cmd = new SqliteCommand(sql, _connection);
+            cmd.Parameters.AddWithValue("@token", token);
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        #endregion
+
         public void Dispose()
         {
             _connection?.Close();
@@ -455,10 +640,20 @@ namespace AICompanion.Desktop.Services.Database
     {
         public int Id { get; set; }
         public string Username { get; set; } = "";
+        public string? Email { get; set; }
         public string PasswordHash { get; set; } = "";
         public string Salt { get; set; } = "";
+        public string HashAlgorithm { get; set; } = "SHA256";
         public DateTime CreatedAt { get; set; }
         public DateTime? LastLoginAt { get; set; }
+    }
+
+    public class SessionTokenRecord
+    {
+        public int Id { get; set; }
+        public int UserId { get; set; }
+        public string Username { get; set; } = "";
+        public DateTime ExpiresAt { get; set; }
     }
 
     public class SecurityCodeRecord

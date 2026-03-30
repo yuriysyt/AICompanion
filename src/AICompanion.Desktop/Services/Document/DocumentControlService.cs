@@ -42,6 +42,15 @@ namespace AICompanion.Desktop.Services.Document
         [DllImport("user32.dll")]
         private static extern bool SetForegroundWindow(IntPtr hWnd);
 
+        // keybd_event: lower-level than SendKeys — works reliably on Word's _WwG editing canvas
+        // where SendKeys sometimes loses the Ctrl modifier on high-DPI or fast machines.
+        [DllImport("user32.dll")]
+        private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+
+        private const byte VK_CONTROL = 0x11;
+        private const byte VK_S       = 0x53;
+        private const uint KEYEVENTF_KEYUP = 0x0002;
+
         public DocumentControlService(ILogger<DocumentControlService>? logger = null)
         {
             _logger = logger;
@@ -256,8 +265,20 @@ namespace AICompanion.Desktop.Services.Document
             try
             {
                 _logger?.LogInformation("Saving document");
-                await Task.Delay(30);
-                SendKeys.SendWait("^s");
+
+                // Use keybd_event instead of SendKeys.SendWait("^s").
+                // Reason: Word's _WwG editing canvas is a legacy Win32 child window.
+                // SendKeys uses PostMessage which can silently drop the Ctrl modifier when
+                // the focus chain changes during injection. keybd_event injects at the hardware
+                // input level, bypassing message-queue race conditions.
+                await Task.Delay(50);   // ensure target window has processed prior events
+                keybd_event(VK_CONTROL, 0, 0, UIntPtr.Zero);                   // Ctrl down
+                keybd_event(VK_S,       0, 0, UIntPtr.Zero);                   // S down
+                keybd_event(VK_S,       0, KEYEVENTF_KEYUP, UIntPtr.Zero);     // S up
+                keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);     // Ctrl up
+
+                // Allow Word time to process the save and dismiss any format-compatibility dialog.
+                await Task.Delay(2500);
 
                 return DocumentActionResult.Success(
                     "Document saved",

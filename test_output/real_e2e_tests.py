@@ -25,6 +25,8 @@ import ctypes
 import subprocess
 import traceback
 import datetime
+import zipfile
+import xml.etree.ElementTree as ET
 import psutil
 import pyautogui
 
@@ -253,6 +255,64 @@ def _activity_text_fresh(win) -> str:
     return _all_text(win)
 
 
+# ─── Document verification helpers ───────────────────────────────────────────
+
+def _read_docx_text(path: str) -> str:
+    """Extract plain text from a .docx file via its word/document.xml."""
+    try:
+        with zipfile.ZipFile(path, 'r') as z:
+            with z.open('word/document.xml') as f:
+                tree = ET.parse(f)
+                ns = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
+                texts = [t.text for t in tree.findall('.//w:t', ns) if t.text]
+                return ' '.join(texts)
+    except Exception as e:
+        _log(f"  {YELLOW}⚠ read_docx_text failed: {e}{RESET}")
+        return ""
+
+
+def _find_latest_essay_docx() -> str:
+    """Find the most recently modified essay_*.docx in ~/Documents."""
+    docs = os.path.expanduser("~/Documents")
+    try:
+        files = [
+            os.path.join(docs, f) for f in os.listdir(docs)
+            if f.lower().startswith("essay_") and f.lower().endswith(".docx")
+        ]
+        if files:
+            return max(files, key=os.path.getmtime)
+    except Exception:
+        pass
+    return ""
+
+
+def _find_latest_note_txt() -> str:
+    """Find the most recently modified note_*.txt in %TEMP%."""
+    temp = os.environ.get("TEMP", os.path.join(
+        os.environ.get("USERPROFILE", ""), "AppData", "Local", "Temp"))
+    try:
+        files = [
+            os.path.join(temp, f) for f in os.listdir(temp)
+            if f.lower().startswith("note_") and f.lower().endswith(".txt")
+        ]
+        if files:
+            return max(files, key=os.path.getmtime)
+    except Exception:
+        pass
+    return ""
+
+
+def _bring_to_foreground(win) -> None:
+    """Bring a pywinauto window to the foreground using Win32 calls."""
+    try:
+        hwnd = win.handle
+        ctypes.windll.user32.ShowWindow(hwnd, 9)       # SW_RESTORE
+        ctypes.windll.user32.SetForegroundWindow(hwnd)
+        time.sleep(0.6)
+    except Exception as e:
+        _log(f"  {YELLOW}⚠ bring_to_foreground: {e}{RESET}")
+
+
 # ─── Command sender ───────────────────────────────────────────────────────────
 
 def _send(win, text: str) -> None:
@@ -376,30 +436,56 @@ def T3_word_no_duplicate(win) -> None:
 
 
 def T4_write_essay_word(win) -> None:
-    """T4 — 'write essay about the history of aviation in Word' (Granite ~20s)."""
-    if _count("WINWORD.EXE", "WINWORD") == 0:
-        _send(win, "open word document")
-        time.sleep(COMPLEX_WAIT)
+    """T4 — 'write essay about the history of aviation in Word'.
+    REAL verification: .docx file exists + has content + Word window visible."""
+    # Kill Word upfront so the C# code gets a clean slate
+    _kill("WINWORD.EXE", "WINWORD")
+    time.sleep(1)
 
     _send(win, "write essay about the history of aviation in Word")
-    time.sleep(GRANITE_WAIT + 5)
+    # Extra wait: Granite generation (~18s) + kill-old-Word delay + Word startup
+    time.sleep(GRANITE_WAIT + 10)
 
-    word_win = _find_win("Word", timeout=6)
+    # ── 1. Find Word window and bring it to foreground ────────────────────
+    word_win = _find_win("Word", timeout=10)
     if word_win:
-        ss = _screenshot_win(word_win, "T4_word_essay")
-        _screenshot_win(word_win, "word_with_content")   # dedicated
+        _bring_to_foreground(word_win)
+        time.sleep(1)
+        ss = _screenshot("T4_word_essay")          # full desktop — Word in front
+        _screenshot("word_with_content")            # dedicated alias
         wt = _all_text(word_win).lower()
-        _log(f"  Word text snippet: {wt[:200]!r}")
+        _log(f"  Word UI text snippet: {wt[:200]!r}")
     else:
         ss = _screenshot("T4_word_essay")
+        _log(f"  {YELLOW}⚠ No Word window found{RESET}")
 
-    activity = _activity_text_fresh(win).lower()
-    kw = ["aviation", "essay", "written", "typed", "type_text", "history", "step", "executed",
-          "plan", "word", "document", "text"]
-    if any(k in activity for k in kw):
-        _pass("T4", "Write essay in Word", "activity confirms write", ss)
+    # ── 2. Read actual .docx content (binary proof) ───────────────────────
+    docx_path = _find_latest_essay_docx()
+    docx_text = ""
+    if docx_path:
+        docx_text = _read_docx_text(docx_path)
+        _log(f"  📄 docx: {os.path.basename(docx_path)}  ({len(docx_text)} chars)")
+        _log(f"  📄 content snippet: {docx_text[:250]!r}")
     else:
-        _fail("T4", "Write essay in Word", f"activity: {activity[:300]}", ss)
+        _log(f"  {YELLOW}⚠ No essay_*.docx in ~/Documents{RESET}")
+
+    # ── 3. Honest verdict ─────────────────────────────────────────────────
+    file_ok    = bool(docx_path and os.path.isfile(docx_path))
+    content_ok = len(docx_text.strip()) > 50
+    window_ok  = word_win is not None
+
+    if file_ok and content_ok and window_ok:
+        _pass("T4", "Write essay in Word",
+              f"docx={os.path.basename(docx_path)} ({len(docx_text)} chars), Word window visible", ss)
+    elif file_ok and content_ok:
+        _fail("T4", "Write essay in Word",
+              f"docx has content ({len(docx_text)} chars) but Word window not visible", ss)
+    elif file_ok:
+        _fail("T4", "Write essay in Word",
+              f"docx exists but content empty (len={len(docx_text)})", ss)
+    else:
+        _fail("T4", "Write essay in Word",
+              f"No essay_*.docx in ~/Documents; Word window={'found' if window_ok else 'not found'}", ss)
 
 
 def T5_create_notebook(win) -> None:
@@ -422,29 +508,61 @@ def T5_create_notebook(win) -> None:
 
 
 def T6_write_poem_notepad(win) -> None:
-    """T6 — 'write a short poem about the ocean' → Notepad gets text."""
-    if _count("notepad.exe", "notepad") == 0:
-        _send(win, "create new notebook")
-        time.sleep(COMPLEX_WAIT)
+    """T6 — write poem to Notepad.
+    REAL verification: note_*.txt exists + has content + Notepad window visible.
+    Command ends with 'in notepad' so the write_notebook regex routes correctly."""
+    # Kill Notepad upfront so C# opens a fresh focused window
+    _kill("notepad.exe", "notepad")
+    time.sleep(0.5)
 
-    _send(win, "write a short poem about the ocean")
-    time.sleep(GRANITE_WAIT)
+    # 'in notepad' suffix matches the write_notebook regex in LocalCommandProcessor
+    _send(win, "write a short poem about the ocean in notepad")
+    time.sleep(GRANITE_WAIT + 7)
 
-    np_win = _find_win("Notepad", timeout=5)
+    # ── 1. Find Notepad window and bring it to foreground ─────────────────
+    np_win = _find_win("Notepad", timeout=10)
     if np_win:
-        ss = _screenshot_win(np_win, "T6_notepad_poem")
-        _screenshot_win(np_win, "notepad_with_content")  # dedicated
+        _bring_to_foreground(np_win)
+        time.sleep(1)
+        ss = _screenshot("T6_notepad_poem")        # full desktop — Notepad in front
+        _screenshot("notepad_with_content")         # dedicated alias
         nt = _all_text(np_win).lower()
-        _log(f"  Notepad text snippet: {nt[:200]!r}")
+        _log(f"  Notepad UI text snippet: {nt[:200]!r}")
     else:
         ss = _screenshot("T6_notepad_poem")
+        _log(f"  {YELLOW}⚠ No Notepad window found{RESET}")
 
-    activity = _all_text(win).lower()
-    kw = ["poem", "ocean", "written", "typed", "type_text", "step", "executed", "note"]
-    if any(k in activity for k in kw):
-        _pass("T6", "Write poem in Notepad", "activity confirms write", ss)
+    # ── 2. Read actual .txt content (binary proof) ────────────────────────
+    txt_path = _find_latest_note_txt()
+    txt_text = ""
+    if txt_path:
+        try:
+            with open(txt_path, encoding="utf-8") as fh:
+                txt_text = fh.read()
+        except Exception:
+            txt_text = ""
+        _log(f"  📄 txt: {os.path.basename(txt_path)}  ({len(txt_text)} chars)")
+        _log(f"  📄 content snippet: {txt_text[:250]!r}")
     else:
-        _fail("T6", "Write poem in Notepad", f"activity: {activity[:200]}", ss)
+        _log(f"  {YELLOW}⚠ No note_*.txt in %TEMP%{RESET}")
+
+    # ── 3. Honest verdict ─────────────────────────────────────────────────
+    file_ok    = bool(txt_path and os.path.isfile(txt_path))
+    content_ok = len(txt_text.strip()) > 20
+    window_ok  = np_win is not None
+
+    if file_ok and content_ok and window_ok:
+        _pass("T6", "Write poem in Notepad",
+              f"txt={os.path.basename(txt_path)} ({len(txt_text)} chars), Notepad window visible", ss)
+    elif file_ok and content_ok:
+        _fail("T6", "Write poem in Notepad",
+              f"txt has content ({len(txt_text)} chars) but Notepad window not visible", ss)
+    elif file_ok:
+        _fail("T6", "Write poem in Notepad",
+              f"txt exists but content empty (len={len(txt_text)})", ss)
+    else:
+        _fail("T6", "Write poem in Notepad",
+              f"No note_*.txt in %TEMP%; Notepad window={'found' if window_ok else 'not found'}", ss)
 
 
 def T7_open_calculator(win) -> None:

@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Companion - Pitch Deck (Light Academic Theme)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <style>
+/* --- THE SETUP (LIGHT ACADEMIC THEME) --- */
+* {
+    box-sizing: border-box;
+}
+
+body {
+    background-color: #e2e8f0; 
+    display: grid;
+    gap: 30px;
+    grid-template-columns: 1fr;
+    margin: 0;
+    min-height: 100vh;
+    padding: 30px 0;
+    place-items: center;
+}
+
+.slide-container {
+    align-items: flex-start;
+    background-color: #ffffff; 
+    border-radius: 8px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+    font-family: 'Inter', sans-serif;
+    height: 720px;
+    justify-content: flex-start;
+    overflow: hidden;
+    padding: 50px 60px;
+    position: relative;
+    width: 1280px;
+    color: #0f172a; 
+}
+
+/* Academic Blue Accent Line */
+.slide-container::after {
+    background: #2563eb; 
+    bottom: 0;
+    content: '';
+    height: 6px;
+    left: 0;
+    position: absolute;
+    width: 100%;
+}
+
+.slide-container > * {
+    position: relative;
+    z-index: 1;
+}
+
+/* --- CONSISTENT TYPOGRAPHY --- */
+.slide-container h1, .slide-container h2, .slide-container h3, .slide-container h4 {
+    color: #0f172a; 
+    font-weight: 700;
+    margin: 0;
+    letter-spacing: -0.02em;
+}
+
+.slide-container h1 span, .slide-container h2 span {
+    color: #2563eb; 
+}
+
+.slide-container p, .slide-container li, .slide-container .subtitle {
+    color: #334155; 
+    font-weight: 400;
+}
+
+.slide-container code, .slide-container .mono {
+    font-family: 'JetBrains Mono', monospace;
+    background-color: #f1f5f9; 
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: #1d4ed8; 
+    font-size: 0.9em;
+    border: 1px solid #e2e8f0;
+    font-weight: 500;
+}
+
+.slide-container h1 {
+    font-size: 72px;
+    line-height: 1.1;
+    margin-bottom: 20px;
+}
+
+.slide-container h2.slide-title {
+    font-size: 42px;
+    line-height: 1.2;
+    margin-bottom: 40px;
+    width: 100%;
+    border-bottom: 2px solid #f1f5f9;
+    padding-bottom: 15px;
+}
+
+.slide-container h3 {
+    font-size: 26px;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.slide-container p, .slide-container li {
+    font-size: 20px;
+    line-height: 1.6;
+}
+
+.slide-container .subtitle {
+    font-size: 24px;
+    line-height: 1.4;
+    color: #475569;
+}
+
+.content-area {
+    align-items: flex-start;
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    width: 100%;
+    height: calc(100% - 90px);
+}
+
+/* --- LAYOUT DEFINITIONS --- */
+
+/* Title Slide */
+.title-layout {
+    align-items: center;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    justify-content: center;
+    text-align: center;
+    width: 100%;
+}
+
+.title-layout .author-tag {
+    margin-top: 50px;
+    padding: 10px 20px;
+    border: 1px solid #e2e8f0;
+    border-radius: 20px;
+    background-color: #f8fafc;
+    color: #2563eb;
+    font-weight: 600;
+    font-size: 18px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+/* Image Right, Text Left */
+.two-column {
+    display: flex;
+    gap: 60px;
+    width: 100%;
+    height: 100%;
+}
+
+.two-column .text-column {
+    flex: 1.2;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.two-column .image-column {
+    flex: 0.8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+}
+
+/* IMAGE STYLES */
+.image-wrapper {
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+    height: 420px;
+    width: 100%;
+}
+
+.image-wrapper img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+ul.bullet-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+ul.bullet-list li {
+    padding-left: 30px;
+    position: relative;
+}
+
+ul.bullet-list li::before {
+    color: #2563eb;
+    content: '→';
+    font-size: 24px;
+    left: 0;
+    position: absolute;
+    top: -2px;
+    font-weight: bold;
+}
+
+ul.bullet-list li strong {
+    color: #0f172a;
+}
+
+/* Styled Bullet Points Layout */
+.styled-bullets-wrapper {
+    width: 100%;
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+.styled-bullets-wrapper ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
+
+.styled-bullets-wrapper li {
+    background-color: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 25px 30px 25px 80px;
+    position: relative;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+}
+
+.styled-bullets-wrapper li i {
+    color: #2563eb;
+    font-size: 32px;
+    left: 25px;
+    position: absolute;
+    top: 28px;
+}
+
+.styled-bullets-wrapper li strong {
+    color: #0f172a;
+    display: block;
+    font-size: 22px;
+    margin-bottom: 8px;
+}
+
+/* Tiled Content (Icons/Text) */
+.tiled-content {
+    display: flex;
+    gap: 30px;
+    width: 100%;
+    height: 100%;
+    align-items: center;
+}
+
+.tiled-content .tile {
+    background-color: #ffffff;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    padding: 40px 30px;
+    height: 400px;
+}
+
+.tile .icon {
+    color: #2563eb;
+    font-size: 48px;
+    margin-bottom: 25px;
+    background: #eff6ff;
+    width: 80px;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 16px;
+}
+
+.tile h3 {
+    margin-bottom: 15px;
+}
+
+.tile p {
+    font-size: 18px;
+}
+
+/* Two Column Tiled Text */
+.two-column.tiled {
+    gap: 40px;
+    align-items: center;
+}
+
+.two-column.tiled > div {
+    background-color: #f8fafc;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    padding: 40px;
+    flex: 1;
+    height: 420px;
+    display: flex;
+    flex-direction: column;
+}
+
+.two-column.tiled h3 {
+    color: #1e40af; 
+    font-size: 32px;
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 20px;
+    margin-bottom: 20px;
+}
+
+.two-column.tiled ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.two-column.tiled li {
+    padding-left: 25px;
+    position: relative;
+    font-size: 18px;
+}
+
+.two-column.tiled li::before {
+    content: '■';
+    color: #2563eb;
+    font-size: 12px;
+    position: absolute;
+    left: 0;
+    top: 6px;
+}
+
+/* Timeline Layout */
+.timeline-layout {
+    align-items: center;
+    display: flex;
+    height: 400px;
+    justify-content: space-between;
+    position: relative;
+    width: 100%;
+    margin-top: 40px;
+}
+
+.timeline-layout .timeline-line {
+    background: #cbd5e1;
+    height: 4px;
+    left: 0;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-2px);
+    width: 100%;
+    z-index: 0;
+}
+
+.timeline-item {
+    position: relative;
+    width: 22%;
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 25px;
+    z-index: 2;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.05);
+}
+
+.timeline-item::before {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    background-color: #ffffff;
+    border: 4px solid #2563eb;
+    border-radius: 50%;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 3;
+}
+
+.timeline-item:nth-child(even) {
+    margin-top: -180px;
+}
+
+.timeline-item:nth-child(even)::before {
+    bottom: -32px;
+}
+
+.timeline-item:nth-child(odd) {
+    margin-top: 180px;
+}
+
+.timeline-item:nth-child(odd)::before {
+    top: -32px;
+}
+
+.timeline-item h3 {
+    color: #1e40af;
+    font-size: 20px;
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.timeline-item p {
+    font-size: 16px;
+    line-height: 1.4;
+    text-align: center;
+    color: #475569;
+}
+
+/* Q&A Layout */
+.qa-layout {
+    align-items: center;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    justify-content: center;
+    text-align: center;
+    width: 100%;
+}
+
+.qa-layout h2 {
+    font-size: 80px;
+    margin-bottom: 20px;
+    color: #0f172a;
+}
+
+.qa-layout p {
+    font-size: 24px;
+    color: #475569;
+    max-width: 600px;
+}
+
+.qa-layout .contact-info {
+    margin-top: 60px;
+    padding: 20px 40px;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background-color: #f8fafc;
+}
+
+.qa-layout .contact-info p {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 18px;
+    color: #2563eb;
+    margin: 5px 0;
+    font-weight: 600;
+}
+    </style>
+</head>
+<body>
+
+<!-- Slide 1: Title Slide -->
+<div class="slide-container" id="slide1">
+    <div class="title-layout">
+        <h1>AI Companion for the<br><span>Visually Impaired</span></h1>
+        <p class="subtitle">A Local-First, Agentic AI for Physical OS Interaction</p>
+        <div class="author-tag">Interdisciplinary Project Design (IPD)</div>
+    </div>
+    <!-- Заметки для спикера: 
+    Уважаемая комиссия, добрый день. Сегодня мы представляем наш проект IPD: ИИ-ассистент, разработанный специально для слабовидящих пользователей, пожилых людей и людей с нарушениями моторики. В этой презентации мы рассмотрим архитектурные, безопасные и функциональные решения, которые позволили нам создать настоящего "агентного" помощника для управления ОС. 
+    -->
+</div>
+
+<!-- Slide 2: The Problem -->
+<div class="slide-container" id="slide2">
+    <h2 class="slide-title">The Accessibility <span>Gap</span></h2>
+    <div class="content-area">
+        <div class="two-column">
+            <div class="text-column">
+                <ul class="bullet-list">
+                    <li><strong>UI/Cursor-Centric Systems:</strong> Modern Operating Systems (Windows, macOS) demand high visual acuity and precise motor control, excluding millions of users.</li>
+                    <li><strong>Reactive, Not Active:</strong> Existing accessibility tools like <code>NVDA</code> only read the screen back to users. They do NOT take physical actions on the user's behalf.</li>
+                    <li><strong>API-Bound Limitations:</strong> Voice assistants (Siri, Windows Copilot) cannot physically control generic desktop software; they are restricted to isolated API tasks.</li>
+                    <li><strong>The Privacy Threat:</strong> Cloud-based AI systems require sending screen data and private user documents to external servers (OpenAI/Google), creating unacceptable privacy risks.</li>
+                </ul>
+            </div>
+            <div class="image-column">
+                <!-- Вставлено абстрактное технологичное фото из Unsplash -->
+                <div class="image-wrapper">
+                    <img src="https://images.unsplash.com/photo-1504384308090-c894fdcc538d?q=80&w=800&auto=format&fit=crop" alt="Complex technology interface">
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Заметки для спикера: 
+    Основная проблема, которую мы решаем, — это огромный разрыв в доступности современных ОС. Они полностью ориентированы на мышь и зрение. Существующие инструменты, такие как NVDA, просто читают текст с экрана, но не совершают действий за пользователя. Голосовые помощники вроде Copilot ограничены своими песочницами и API. Более того, отправка данных с экрана слабовидящего человека в облачный ИИ — это огромный риск для приватности. Нам нужно было решение, которое станет "руками и глазами" пользователя на его локальной машине.
+    -->
+</div>
+
+<!-- Slide 3: Project Vision & Strategy -->
+<div class="slide-container" id="slide3">
+    <h2 class="slide-title">Project <span>Vision & Strategy</span></h2>
+    <div class="content-area">
+        <div class="tiled-content">
+            <div class="tile">
+                <div class="icon"><i class="fa-solid fa-server"></i></div>
+                <h3>Local-First</h3>
+                <p>100% on-device execution. We utilize local LLMs via Ollama to guarantee absolute data privacy. No user documents or screen captures ever leave the physical machine.</p>
+            </div>
+            <div class="tile">
+                <div class="icon"><i class="fa-solid fa-robot"></i></div>
+                <h3>Agentic Action</h3>
+                <p>Translating human intent into physical operations. The AI dynamically generates sequential plans, moving the mouse and typing exactly as a human operator would.</p>
+            </div>
+            <div class="tile">
+                <div class="icon"><i class="fa-solid fa-microphone-lines"></i></div>
+                <h3>Voice-Driven</h3>
+                <p>Frictionless UX completely bypassing traditional UI navigation. Audio inputs are parsed, contextualized, and executed with near-zero latency.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Slide 4: High-Level Architecture -->
+<div class="slide-container" id="slide4">
+    <h2 class="slide-title">High-Level <span>Microservice Architecture</span></h2>
+    <div class="content-area">
+        <div class="two-column tiled">
+            <div>
+                <h3>Frontend Engine (C# WPF .NET 8)</h3>
+                <ul>
+                    <li><strong>Responsibility:</strong> Bare-metal OS interaction, UI rendering, and voice capture.</li>
+                    <li><strong>Performance:</strong> Compiled, low-latency execution utilizing direct Win32 API hooks.</li>
+                    <li><strong>Task Routing:</strong> Intercepts and filters simple commands locally without invoking the AI engine.</li>
+                    <li><strong>UX Integrity:</strong> Modern, accessible MVVM architecture (`MainWindow.xaml` & ViewModels).</li>
+                </ul>
+            </div>
+            <div>
+                <h3>AI Brain (Python FastAPI)</h3>
+                <ul>
+                    <li><strong>Responsibility:</strong> Deep reasoning, intent extraction, memory, and multi-step JSON planning.</li>
+                    <li><strong>Ecosystem:</strong> Leverages the mature Python AI tooling landscape.</li>
+                    <li><strong>Endpoints:</strong> Exposes asynchronous REST endpoints (`/api/plan`, `/api/intent`).</li>
+                    <li><strong>Scalability:</strong> Decoupled nature allows swapping out underlying LLMs seamlessly.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Slide 5: The C# Execution Engine -->
+<div class="slide-container" id="slide5">
+    <h2 class="slide-title">The C# <span>Execution Engine</span></h2>
+    <div class="content-area">
+        <div class="two-column">
+            <div class="text-column">
+                <ul class="bullet-list">
+                    <li><strong>The Gateway:</strong> <code>LocalCommandProcessor.cs</code> strips conversational filler ("please", "can you") from inputs.</li>
+                    <li><strong>Zero-Latency Routing:</strong> Uses local Regex and <code>FuzzySharp</code> (Levenshtein distance) to instantly execute simple commands (e.g., "open calculator") without network inference.</li>
+                    <li><strong>The Muscle:</strong> <code>AgenticExecutionService.cs</code> receives JSON action plans from the Python backend.</li>
+                    <li><strong>Bare-Metal Control:</strong> Executes plans using raw <code>Win32 APIs</code> for precise physical keystrokes and UI interactions.</li>
+                </ul>
+            </div>
+            <div class="image-column">
+                <!-- Вставлено фото кода из Unsplash -->
+                <div class="image-wrapper">
+                    <img src="https://images.unsplash.com/photo-1555066931-4365d14bab8c?q=80&w=800&auto=format&fit=crop" alt="C# Code on Monitor">
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Slide 6: The Python AI Brain -->
+<div class="slide-container" id="slide6">
+    <h2 class="slide-title">The Python <span>AI Brain</span></h2>
+    <div class="content-area">
+        <div class="two-column">
+            <div class="text-column">
+                <ul class="bullet-list">
+                    <li><strong>The LLM Engine:</strong> Powered by <code>IBM Granite 3-dense</code>, an enterprise-grade model optimized for structured reasoning.</li>
+                    <li><strong>Local Hosting:</strong> Run 100% locally via <code>Ollama</code>, completely severing reliance on cloud compute.</li>
+                    <li><strong>The API Bridge:</strong> <code>server.py</code> and <code>agentic_planner.py</code> manage REST requests from the C# frontend.</li>
+                    <li><strong>Task Breakdown:</strong> Converts ambiguous user speech ("Open Notepad, write a grocery list, then save it") into structured, actionable JSON arrays.</li>
+                </ul>
+            </div>
+            <div class="image-column">
+                <!-- Вставлено фото нейросети/AI из Unsplash -->
+                <div class="image-wrapper">
+                    <img src="https://images.unsplash.com/photo-1620712943543-bcc4688e7485?q=80&w=800&auto=format&fit=crop" alt="Artificial Intelligence Network">
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Slide 7: Vector Memory & Context -->
+<div class="slide-container" id="slide7">
+    <h2 class="slide-title">Vector Memory <span>& Context</span></h2>
+    <div class="content-area">
+        <div class="two-column">
+            <div class="text-column">
+                <ul class="bullet-list">
+                    <li><strong>Embedded Database:</strong> We integrate <code>ChromaDB</code> directly into the Python microservice.</li>
+                    <li><strong>Dialogue History:</strong> Stores the most recent conversational history (up to 10 dialogue turns).</li>
+                    <li><strong>Contextual Awareness:</strong> Allows the AI to understand pronouns and references (e.g., "Close it", "Read the second line again").</li>
+                    <li><strong>State Persistence:</strong> Prevents the "amnesia" common in stateless API architectures, crucial for complex, multi-step accessibility tasks.</li>
+                </ul>
+            </div>
+            <div class="image-column">
+                 <!-- Вставлено фото баз данных/серверов из Unsplash -->
+                 <div class="image-wrapper">
+                    <img src="https://images.unsplash.com/photo-1558494949-ef010cbdcc31?q=80&w=800&auto=format&fit=crop" alt="Vector Database Servers">
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Slide 8: Voice Processing Reliability -->
+<div class="slide-container" id="slide8">
+    <h2 class="slide-title">Voice Processing <span>Reliability</span></h2>
+    <div class="content-area">
+        <div class="styled-bullets-wrapper">
+            <ul>
+                <li>
+                    <i class="fa-solid fa-microphone"></i>
+                    <strong>UnifiedVoiceManager.cs</strong>
+                    Intercepts microphone audio at the OS level, managing streams asynchronously to prevent UI thread blocking.
+                </li>
+                <li>
+                    <i class="fa-solid fa-cloud"></i>
+                    <strong>Premium Primary Pipeline</strong>
+                    Primary Text-to-Speech (TTS) and Speech-to-Text (STT) are powered by the ElevenLabs premium cloud API for ultra-realistic synthesis.
+                </li>
+                <li>
+                    <i class="fa-solid fa-tower-broadcast"></i>
+                    <strong>Offline Whisper.net Fallback</strong>
+                    If internet connectivity drops, the system seamlessly hot-swaps to an offline <code>ggml-tiny.en.bin</code> Whisper model without failing the user session.
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<!-- Slide 9: The Agentic Planner Pipeline -->
+<div class="slide-container" id="slide9">
+    <h2 class="slide-title">The Agentic Planner <span>Pipeline</span></h2>
+    <div class="content-area">
+        <div class="timeline-layout">
+            <div class="timeline-line"></div>
+            
+            <div class="timeline-item">
+                <h3>1. Voice Input</h3>
+                <p>User speaks: "Open Notepad, write a grocery list, then save it."</p>
+            </div>
+            
+            <div class="timeline-item">
+                <h3>2. Intent Extraction</h3>
+                <p>IBM Granite processes text, identifies multi-step OS requirements.</p>
+            </div>
+            
+            <div class="timeline-item">
+                <h3>3. JSON Generation</h3>
+                <p class="mono">[{"action": "open_app", "target": "notepad"}, {"action": "type", "target": "milk"}]</p>
+            </div>
+            
+            <div class="timeline-item">
+                <h3>4. Win32 Execution</h3>
+                <p>C# AgenticExecutionService parses JSON, triggers OS physical inputs.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Slide 10: Win32 Target Safety & Focus -->
+<div class="slide-container" id="slide10">
+    <h2 class="slide-title">Win32 Target <span>Safety & Focus</span></h2>
+    <div class="content-area">
+        <div class="two-column">
+            <div class="text-column">
+                <ul class="bullet-list">
+                    <li><strong>The Rogue Keystroke Problem:</strong> Blindly sending keystrokes can result in typing passwords into public chat windows if focus shifts unexpectedly.</li>
+                    <li><strong>Focus Verification:</strong> The C# engine strictly verifies window handles (`HWND`) before every single simulated physical action.</li>
+                    <li><strong>API Utilization:</strong> Uses <code>SetForegroundWindow</code> and <code>AttachThreadInput</code> to forcefully seize and lock target contexts.</li>
+                    <li><strong>Fail-Safe Halting:</strong> If the target window unexpectedly loses focus, the execution pipeline instantly halts, protecting user data.</li>
+                </ul>
+            </div>
+            <div class="image-column">
+                <!-- Вставлено фото кибербезопасности/щита из Unsplash -->
+                <div class="image-wrapper">
+                    <img src="https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=800&auto=format&fit=crop" alt="Cybersecurity Lock">
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Slide 11: Project Evolution -->
+<div class="slide-container" id="slide11">
+    <h2 class="slide-title">Project <span>Evolution</span></h2>
+    <div class="content-area">
+        <div class="timeline-layout">
+            <div class="timeline-line"></div>
+            
+            <div class="timeline-item">
+                <h3>Phase 1</h3>
+                <p><strong>The C# Monolith:</strong> Standalone app using fragile SendKeys and local regex. High failure rate on complex tasks.</p>
+            </div>
+            
+            <div class="timeline-item">
+                <h3>Phase 2-3</h3>
+                <p><strong>Python API & Planner:</strong> Split architecture. Integrated OpenClaw principles and IBM Granite JSON task generation.</p>
+            </div>
+            
+            <div class="timeline-item">
+                <h3>Phase 4-5</h3>
+                <p><strong>Security & Refactor:</strong> Rewrote C# engine with robust Win32 GUI handles. Fixed context loss and ChromaDB memory bugs.</p>
+            </div>
+            
+            <div class="timeline-item">
+                <h3>Phase 6</h3>
+                <p><strong>QA & Speed:</strong> Reduced execution latency, added shared HTTP clients, implemented offline Whisper fallback.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Slide 12: Future RoadMap: True Vision -->
+<div class="slide-container" id="slide12">
+    <h2 class="slide-title">Roadmap (Phase 7): <span>True Vision</span></h2>
+    <div class="content-area">
+        <div class="two-column">
+            <div class="text-column">
+                <ul class="bullet-list">
+                    <li><strong>Bypassing API Limits:</strong> Moving from "blind Win32 APIs" to true pixel-level computer vision control.</li>
+                    <li><strong>Base64 Screen Capture:</strong> The C# app will capture screen states and push Base64 frames to the Python Vision AI.</li>
+                    <li><strong>Spatial Mapping:</strong> The AI will "look" at the screen and return exact <code>(X, Y)</code> pixel coordinates of target buttons.</li>
+                    <li><strong>Physical Mouse Actuation:</strong> C# will move the physical mouse cursor to the mapped coordinates, interacting with non-standard UIs flawlessly.</li>
+                </ul>
+            </div>
+            <div class="image-column">
+                 <!-- Вставлено фото Computer Vision/Анализа данных из Unsplash -->
+                 <div class="image-wrapper">
+                    <img src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=800&auto=format&fit=crop" alt="Computer Vision Screen Analysis">
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Slide 13: Conversational AI & Security -->
+<div class="slide-container" id="slide13">
+    <h2 class="slide-title">Roadmap: <span>Conversational AI & Security</span></h2>
+    <div class="content-area">
+        <div class="two-column tiled">
+            <div>
+                <h3>Interactive Two-Way Dialogue</h3>
+                <ul>
+                    <li>Shifting the AI from a silent "Do-er" to an active participant.</li>
+                    <li><strong>Clarification Prompts:</strong> "I see two documents named 'Tax'. Which one should I open?"</li>
+                    <li>Dynamic re-planning based on mid-execution user corrections.</li>
+                    <li>Creates a genuine "companion" UX rather than a rigid command line.</li>
+                </ul>
+            </div>
+            <div>
+                <h3>Secure PIN Authorization</h3>
+                <ul>
+                    <li>Critical safety barrier for destructive or sensitive operations.</li>
+                    <li>Applies to: Sending emails, deleting files, purchasing, banking.</li>
+                    <li><strong>OS Halting:</strong> Execution suspends until user verbally provides a predefined Secure PIN.</li>
+                    <li>Prevents accidental triggers and malicious prompt injections.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Slide 14: Advanced Disability Suite -->
+<div class="slide-container" id="slide14">
+    <h2 class="slide-title">Roadmap: <span>Advanced Disability Suite</span></h2>
+    <div class="content-area">
+        <div class="styled-bullets-wrapper">
+            <ul>
+                <li>
+                    <i class="fa-solid fa-users-gear"></i>
+                    <strong>SQLite Multi-User Database</strong>
+                    Registration system to store personalized accessibility settings, disabled profiles, and distinct ChromaDB memory banks per user.
+                </li>
+                <li>
+                    <i class="fa-solid fa-magnifying-glass-plus"></i>
+                    <strong>Voice-Activated Magnification</strong>
+                    Integration with OS-level magnifier APIs to zoom into specific UI quadrants strictly via voice command.
+                </li>
+                <li>
+                    <i class="fa-solid fa-expand"></i>
+                    <strong>Cursor OCR & Element Narration</strong>
+                    Real-time Optical Character Recognition (OCR) under the mouse cursor, narrating screen elements to assist partially-sighted users navigating complex UIs.
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<!-- Slide 15: Conclusion & Q&A -->
+<div class="slide-container" id="slide15">
+    <div class="qa-layout">
+        <h2>Questions?</h2>
+        <p>Thank you for exploring the architecture of the AI Companion.</p>
+        <div class="contact-info">
+            <p>Project: AI Companion for the Visually Impaired</p>
+            <p>Phase: IPD Final Presentation</p>
+            <p>Architecture: C# WPF + Python FastAPI + IBM Granite</p>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

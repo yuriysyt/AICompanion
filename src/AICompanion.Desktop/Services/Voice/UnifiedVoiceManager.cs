@@ -457,8 +457,8 @@ namespace AICompanion.Desktop.Services.Voice
 
     public class VoiceSettings
     {
-        // ElevenLabs settings - HARDCODED for demo presentation
-        public string ElevenLabsApiKey { get; set; } = "64014d81b4f9dba6da3bd751557ddcb8733fe721e386ac1d9dbe49989ff906bd";
+        /// <summary>Loaded at runtime from DPAPI (SecureApiKeyManager). Never hard-code here.</summary>
+        public string ElevenLabsApiKey { get; set; } = "";
         public string ElevenLabsVoiceId { get; set; } = "JBFqnCBsd6RMkjVDRZzb";
     }
 }

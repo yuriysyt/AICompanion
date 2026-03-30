@@ -4,6 +4,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using AICompanion.Desktop.Services.Database;
+using System.IO;
 
 namespace AICompanion.Desktop.Services.Security
 {
@@ -61,11 +62,10 @@ namespace AICompanion.Desktop.Services.Security
 
         #region Authentication
 
-        public async Task<bool> RegisterUserAsync(string username, string password)
+        public async Task<bool> RegisterUserAsync(string username, string password, string? email = null)
         {
             try
             {
-                // Check if user already exists
                 var existing = await _database.GetUserAsync(username);
                 if (existing != null)
                 {
@@ -73,12 +73,10 @@ namespace AICompanion.Desktop.Services.Security
                     return false;
                 }
 
-                // Generate salt and hash password
                 var salt = GenerateSalt();
                 var passwordHash = HashPassword(password, salt);
 
-                // Create user
-                var userId = await _database.CreateUserAsync(username, passwordHash, salt);
+                var userId = await _database.CreateUserAsync(username, passwordHash, salt, email, "PBKDF2");
                 _logger?.LogInformation("[Security] User {Username} registered with ID {Id}", username, userId);
 
                 return true;
@@ -102,8 +100,17 @@ namespace AICompanion.Desktop.Services.Security
                     return false;
                 }
 
-                // Verify password
-                var passwordHash = HashPassword(password, user.Salt);
+                // Verify password — support both legacy SHA256 and current PBKDF2
+                string passwordHash;
+                if (user.HashAlgorithm == "SHA256")
+                {
+                    passwordHash = HashPasswordSha256Legacy(password, user.Salt);
+                }
+                else
+                {
+                    passwordHash = HashPassword(password, user.Salt);
+                }
+
                 if (passwordHash != user.PasswordHash)
                 {
                     _logger?.LogWarning("[Security] Invalid password for {Username}", username);
@@ -111,7 +118,15 @@ namespace AICompanion.Desktop.Services.Security
                     return false;
                 }
 
-                // Set session
+                // Transparently upgrade legacy SHA256 hashes to PBKDF2 on login
+                if (user.HashAlgorithm == "SHA256")
+                {
+                    var newSalt = GenerateSalt();
+                    var newHash = HashPassword(password, newSalt);
+                    await _database.UpdatePasswordHashAsync(user.Id, newHash, newSalt, "PBKDF2");
+                    _logger?.LogInformation("[Security] Upgraded password hash to PBKDF2 for {Username}", username);
+                }
+
                 _currentUserId = user.Id;
                 _currentUsername = user.Username;
                 _lastActivityTime = DateTime.UtcNow;
@@ -158,8 +173,8 @@ namespace AICompanion.Desktop.Services.Security
         }
 
         /// <summary>
-        /// On first launch, seeds a default admin account with a properly hashed password.
-        /// This runs only once — subsequent launches skip if the user already exists.
+        /// On first launch, seeds a default admin account with a PBKDF2-hashed password.
+        /// On subsequent launches, re-hashes the admin account if it still uses legacy SHA256.
         /// </summary>
         private async Task EnsureDefaultUserAsync()
         {
@@ -170,13 +185,21 @@ namespace AICompanion.Desktop.Services.Security
                 {
                     var salt = GenerateSalt();
                     var passwordHash = HashPassword("admin", salt);
-                    await _database.CreateUserAsync("admin", passwordHash, salt);
-                    _logger?.LogInformation("[Security] Default admin account seeded into database");
+                    await _database.CreateUserAsync("admin", passwordHash, salt, null, "PBKDF2");
+                    _logger?.LogInformation("[Security] Default admin account seeded with PBKDF2 hash");
+                }
+                else if (existing.HashAlgorithm == "SHA256")
+                {
+                    // Migrate legacy admin hash to PBKDF2
+                    var newSalt = GenerateSalt();
+                    var newHash = HashPassword("admin", newSalt);
+                    await _database.UpdatePasswordHashAsync(existing.Id, newHash, newSalt, "PBKDF2");
+                    _logger?.LogInformation("[Security] Migrated admin account to PBKDF2");
                 }
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "[Security] Failed to seed default admin account");
+                _logger?.LogError(ex, "[Security] Failed to seed/migrate default admin account");
             }
         }
 
@@ -208,7 +231,7 @@ namespace AICompanion.Desktop.Services.Security
                     };
                 }
 
-                var success = await RegisterUserAsync(username, password);
+                var success = await RegisterUserAsync(username, password, email);
                 return new AuthResult
                 {
                     Success = success,
@@ -366,13 +389,34 @@ namespace AICompanion.Desktop.Services.Security
 
         private static string GenerateSalt()
         {
-            var saltBytes = new byte[32];
+            // 16-byte (128-bit) salt — NIST standard for PBKDF2
+            var saltBytes = new byte[16];
             using var rng = RandomNumberGenerator.Create();
             rng.GetBytes(saltBytes);
             return Convert.ToBase64String(saltBytes);
         }
 
+        /// <summary>
+        /// PBKDF2 password hashing with 100,000 iterations (NIST SP 800-132 compliant).
+        /// Replaced legacy SHA-256 to resist brute-force attacks.
+        /// </summary>
         private static string HashPassword(string password, string salt)
+        {
+            var saltBytes = Convert.FromBase64String(salt);
+            using var pbkdf2 = new Rfc2898DeriveBytes(
+                password,
+                saltBytes,
+                iterations: 100_000,
+                hashAlgorithm: HashAlgorithmName.SHA256);
+            var hash = pbkdf2.GetBytes(32); // 256-bit output
+            return Convert.ToBase64String(hash);
+        }
+
+        /// <summary>
+        /// Legacy SHA-256 hash used only to verify old accounts before migrating them to PBKDF2.
+        /// Do NOT use this for new passwords.
+        /// </summary>
+        private static string HashPasswordSha256Legacy(string password, string salt)
         {
             using var sha256 = SHA256.Create();
             var combined = Encoding.UTF8.GetBytes(password + salt);
@@ -393,6 +437,104 @@ namespace AICompanion.Desktop.Services.Security
             }
             
             return code.ToString();
+        }
+
+        #endregion
+
+        #region Remember Me (Persistent Session)
+
+        private static readonly string _sessionFilePath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "AICompanion", "session.dat");
+
+        /// <summary>
+        /// Creates a 30-day persistent session token, saves it to DB, and stores
+        /// a DPAPI-encrypted copy on disk for auto-login.
+        /// </summary>
+        public async Task<string> CreatePersistentSessionAsync(int userId)
+        {
+            var tokenBytes = new byte[32];
+            RandomNumberGenerator.Fill(tokenBytes);
+            var token = Convert.ToBase64String(tokenBytes);
+
+            await _database.SaveSessionTokenAsync(userId, token, DateTime.UtcNow.AddDays(30));
+
+            // Encrypt with DPAPI (Windows user-scope — only readable by same Windows user)
+            try
+            {
+                var tokenData = Encoding.UTF8.GetBytes(token);
+                var encrypted = System.Security.Cryptography.ProtectedData.Protect(
+                    tokenData, null, System.Security.Cryptography.DataProtectionScope.CurrentUser);
+                Directory.CreateDirectory(Path.GetDirectoryName(_sessionFilePath)!);
+                await File.WriteAllBytesAsync(_sessionFilePath, encrypted);
+                _logger?.LogInformation("[Security] Remember Me token saved (DPAPI encrypted)");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "[Security] Could not save Remember Me token to disk");
+            }
+
+            return token;
+        }
+
+        /// <summary>
+        /// Tries to restore session from the DPAPI-encrypted file on disk.
+        /// Returns true and sets the current user if the token is valid.
+        /// </summary>
+        public async Task<bool> RestoreSessionAsync()
+        {
+            try
+            {
+                if (!File.Exists(_sessionFilePath)) return false;
+
+                var encrypted = await File.ReadAllBytesAsync(_sessionFilePath);
+                var tokenData = System.Security.Cryptography.ProtectedData.Unprotect(
+                    encrypted, null, System.Security.Cryptography.DataProtectionScope.CurrentUser);
+                var token = Encoding.UTF8.GetString(tokenData);
+
+                var session = await _database.GetValidSessionTokenAsync(token);
+                if (session == null)
+                {
+                    File.Delete(_sessionFilePath);
+                    return false;
+                }
+
+                _currentUserId = session.UserId;
+                _currentUsername = session.Username;
+                _lastActivityTime = DateTime.UtcNow;
+                _currentSessionId = Guid.NewGuid().ToString();
+
+                _logger?.LogInformation("[Security] Session restored for {Username} via Remember Me", session.Username);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogDebug(ex, "[Security] Could not restore session from disk");
+                // Delete corrupted/inaccessible file
+                try { File.Delete(_sessionFilePath); } catch { }
+                return false;
+            }
+        }
+
+        /// <summary>Clears the saved Remember Me token from disk and DB.</summary>
+        public async Task ClearPersistentSessionAsync()
+        {
+            try
+            {
+                if (File.Exists(_sessionFilePath))
+                {
+                    var encrypted = await File.ReadAllBytesAsync(_sessionFilePath);
+                    var tokenData = System.Security.Cryptography.ProtectedData.Unprotect(
+                        encrypted, null, System.Security.Cryptography.DataProtectionScope.CurrentUser);
+                    var token = Encoding.UTF8.GetString(tokenData);
+                    await _database.DeleteSessionTokenAsync(token);
+                    File.Delete(_sessionFilePath);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogDebug(ex, "[Security] Error clearing persistent session");
+            }
         }
 
         #endregion

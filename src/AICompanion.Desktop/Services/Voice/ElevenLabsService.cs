@@ -17,9 +17,9 @@ namespace AICompanion.Desktop.Services.Voice
         private WaveOutEvent? _waveOut;
         private MemoryStream? _audioStream;
         
-        private string _apiKey = "64014d81b4f9dba6da3bd751557ddcb8733fe721e386ac1d9dbe49989ff906bd";
+        private string _apiKey = "";  // Loaded at runtime from SecureApiKeyManager (DPAPI-encrypted keys.dat)
         private string _voiceId = "JBFqnCBsd6RMkjVDRZzb"; // Default voice
-        private string _modelId = "eleven_monolingual_v1";
+        private string _modelId = "eleven_turbo_v2_5";
         private bool _isInitialized = false;
 
         public bool IsInitialized => _isInitialized;

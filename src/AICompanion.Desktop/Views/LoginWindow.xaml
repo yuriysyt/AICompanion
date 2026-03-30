@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="AI Companion - Login"
-        Height="480"
+        Height="580"
         Width="400"
         WindowStyle="None"
         AllowsTransparency="True"

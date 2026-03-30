@@ -127,9 +127,14 @@ namespace AICompanion.Desktop.Views
                         IsAuthenticated = true;
                         AuthenticatedUser = username;
 
-                        if (RememberMeCheck.IsChecked == true)
+                        if (RememberMeCheck.IsChecked == true && _securityService.CurrentUserId.HasValue)
                         {
-                            // TODO: Save session token
+                            await _securityService.CreatePersistentSessionAsync(_securityService.CurrentUserId.Value);
+                        }
+                        else
+                        {
+                            // Clear any old Remember Me token when logging in without the checkbox
+                            await _securityService.ClearPersistentSessionAsync();
                         }
 
                         DialogResult = true;
@@ -173,9 +178,22 @@ namespace AICompanion.Desktop.Views
                 return;
             }
 
-            if (string.IsNullOrEmpty(password) || password.Length < 6)
+            if (string.IsNullOrEmpty(password) || password.Length < 8)
             {
-                ShowRegisterError("Password must be at least 6 characters");
+                ShowRegisterError("Password must be at least 8 characters");
+                return;
+            }
+
+            var hasUpper = false;
+            var hasDigit = false;
+            foreach (var c in password)
+            {
+                if (char.IsUpper(c)) hasUpper = true;
+                if (char.IsDigit(c)) hasDigit = true;
+            }
+            if (!hasUpper || !hasDigit)
+            {
+                ShowRegisterError("Password must contain at least 1 uppercase letter and 1 number");
                 return;
             }
 

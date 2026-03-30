@@ -98,6 +98,13 @@ namespace AICompanion.Desktop.Models
             foreach (var turn in _turns.TakeLast(5))
             {
                 lines.Add($"User: {turn.UserInput}");
+                // Include what was actually done so the AI understands cross-command references
+                // like "do that again" or "undo what you just did".
+                if (!string.IsNullOrEmpty(turn.ActionPerformed))
+                {
+                    var status = turn.WasSuccessful ? "success" : "failed";
+                    lines.Add($"Action: {turn.ActionPerformed} ({status})");
+                }
                 lines.Add($"Assistant: {turn.AssistantResponse}");
             }
 

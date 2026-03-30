@@ -1050,12 +1050,21 @@ namespace AICompanion.Desktop.Services
                     _logger?.LogInformation("[WRITE] Essay saved to '{Path}' ({Bytes} bytes)",
                         tempPath, new System.IO.FileInfo(tempPath).Length);
 
+                    // Kill any existing Notepad so the file opens in a fresh, focused window
+                    foreach (var np in SysProcess.GetProcessesByName("notepad"))
+                        try { np.Kill(); } catch { }
+                    await System.Threading.Tasks.Task.Delay(500);
+
                     SysProcess.Start(new ProcessStartInfo
                     {
                         FileName        = "notepad.exe",
                         Arguments       = $"\"{tempPath}\"",
                         UseShellExecute = true
                     });
+
+                    // Give Notepad time to open then bring it to the foreground
+                    await System.Threading.Tasks.Task.Delay(2000);
+                    BringProcessWindowToForeground("notepad");
                 }
                 catch (Exception ex)
                 {
@@ -1235,12 +1244,21 @@ namespace AICompanion.Desktop.Services
                     _logger?.LogInformation("[WORD-WRITE] Essay saved to '{Path}' ({Bytes} bytes)",
                         path, new System.IO.FileInfo(path).Length);
 
+                    // Kill any open Word so the new file opens in a fresh, focused window
+                    foreach (var wp in SysProcess.GetProcessesByName("WINWORD"))
+                        try { wp.Kill(); } catch { }
+                    await System.Threading.Tasks.Task.Delay(1200);
+
                     SysProcess.Start(new ProcessStartInfo
                     {
                         FileName        = "WINWORD.EXE",
                         Arguments       = $"\"{path}\"",
                         UseShellExecute = true
                     });
+
+                    // Give Word time to load then bring it to the foreground
+                    await System.Threading.Tasks.Task.Delay(3500);
+                    BringProcessWindowToForeground("WINWORD");
                 }
                 catch (Exception ex)
                 {
@@ -1251,6 +1269,31 @@ namespace AICompanion.Desktop.Services
             return new CommandResult(true,
                 $"Writing essay about \"{topic}\" in Word...",
                 $"I'm writing an essay about {topic}. Word will open with the full essay in a few seconds!");
+        }
+
+        /// <summary>
+        /// Polls until a WINWORD or notepad process has a visible main window,
+        /// then restores and foregrounds it. Gives up after ~6 seconds.
+        /// </summary>
+        private static void BringProcessWindowToForeground(string processName)
+        {
+            for (int attempt = 0; attempt < 12; attempt++)
+            {
+                foreach (var p in SysProcess.GetProcessesByName(processName))
+                {
+                    try
+                    {
+                        if (p.MainWindowHandle != IntPtr.Zero)
+                        {
+                            ShowWindow(p.MainWindowHandle, 9 /* SW_RESTORE */);
+                            SetForegroundWindow(p.MainWindowHandle);
+                            return;
+                        }
+                    }
+                    catch { }
+                }
+                System.Threading.Thread.Sleep(500);
+            }
         }
 
         /// <summary>

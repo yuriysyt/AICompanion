@@ -33,12 +33,13 @@
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
                 <RowDefinition Height="90"/>
             </Grid.RowDefinitions>
 
             <!-- Toast Notification Overlay -->
             <Border x:Name="ToastOverlay"
-                    Grid.RowSpan="7"
+                    Grid.RowSpan="8"
                     VerticalAlignment="Top"
                     HorizontalAlignment="Center"
                     Margin="0,60,0,0"
@@ -56,6 +57,96 @@
                     <TextBlock x:Name="ToastIcon" Text="✓" Foreground="White" FontSize="14" FontWeight="Bold" Margin="0,0,8,0" VerticalAlignment="Center"/>
                     <TextBlock x:Name="ToastMessage" Text="" Foreground="White" FontSize="13" FontWeight="SemiBold" MaxWidth="280" TextWrapping="Wrap" VerticalAlignment="Center"/>
                 </StackPanel>
+            </Border>
+
+            <!-- IBM Granite Plan Confirmation Dialog (overlay) -->
+            <Border x:Name="GranitePlanPanel"
+                    Grid.RowSpan="8"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Stretch"
+                    Margin="18,0"
+                    Padding="16"
+                    CornerRadius="14"
+                    Background="{DynamicResource SurfaceBrush}"
+                    BorderBrush="{DynamicResource PrimaryBrush}"
+                    BorderThickness="2"
+                    Visibility="Collapsed"
+                    Panel.ZIndex="90">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="30" ShadowDepth="5" Opacity="0.5" Color="{DynamicResource PrimaryColor}"/>
+                </Border.Effect>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Header -->
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
+                        <TextBlock Text="🤖" FontSize="20" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                        <StackPanel>
+                            <TextBlock Text="What would you like to do?"
+                                       FontSize="15" FontWeight="Bold"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+                            <TextBlock x:Name="GraniteContextText"
+                                       Text="Choose an option below"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap" MaxWidth="300"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Options list -->
+                    <ScrollViewer Grid.Row="1" MaxHeight="220" VerticalScrollBarVisibility="Auto" Margin="0,0,0,10">
+                        <StackPanel x:Name="GraniteOptionsContainer"/>
+                    </ScrollViewer>
+
+                    <!-- Voice hint -->
+                    <Border Grid.Row="2"
+                            Background="{DynamicResource AvatarPanelBrush}"
+                            CornerRadius="8" Padding="10,6" Margin="0,0,0,12">
+                        <TextBlock x:Name="GraniteHintText"
+                                   Text="Say 1, 2, 3 or tap an option • NO to cancel"
+                                   FontSize="11" FontStyle="Italic"
+                                   HorizontalAlignment="Center"
+                                   Foreground="{DynamicResource PrimaryBrush}"/>
+                    </Border>
+
+                    <!-- Execute / Cancel buttons -->
+                    <Grid Grid.Row="3">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Button x:Name="GraniteExecuteButton" Grid.Column="0"
+                                Content="▶ Execute" Cursor="Hand"
+                                Click="GraniteExecute_Click">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="{DynamicResource PrimaryBrush}" CornerRadius="8" Padding="12,9">
+                                        <TextBlock Text="{TemplateBinding Content}" HorizontalAlignment="Center"
+                                                   Foreground="White" FontWeight="SemiBold" FontSize="13"/>
+                                    </Border>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                        <Button x:Name="GraniteCancelButton" Grid.Column="2"
+                                Content="✕ Cancel" Cursor="Hand"
+                                Click="GraniteCancel_Click">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="#E5484D" CornerRadius="8" Padding="12,9">
+                                        <TextBlock Text="{TemplateBinding Content}" HorizontalAlignment="Center"
+                                                   Foreground="White" FontWeight="SemiBold" FontSize="13"/>
+                                    </Border>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                    </Grid>
+                </Grid>
             </Border>
 
             <!-- Custom title bar -->
@@ -231,10 +322,11 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
                     <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
-                        <TextBlock Text="Voice Input"
+                        <TextBlock Text="Voice / Text Input"
                                    FontSize="11"
                                    FontWeight="SemiBold"
                                    Foreground="{DynamicResource PrimaryBrush}"/>
@@ -252,8 +344,53 @@
                                Foreground="{DynamicResource TextSecondaryBrush}"
                                FontSize="13"
                                FontStyle="Italic"
-                               MinHeight="40"
-                               MaxHeight="60"/>
+                               MinHeight="30"
+                               MaxHeight="50"
+                               Margin="0,0,0,8"/>
+
+                    <!-- Text command input (fallback when microphone is unavailable) -->
+                    <Grid Grid.Row="2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="TextCommandInput"
+                                 Grid.Column="0"
+                                 FontSize="12"
+                                 Padding="8,6"
+                                 Background="{DynamicResource SurfaceBrush}"
+                                 Foreground="{DynamicResource TextPrimaryBrush}"
+                                 BorderBrush="{DynamicResource InputBorderBrush}"
+                                 BorderThickness="1"
+                                 VerticalContentAlignment="Center"
+                                 MaxLength="500"
+                                 ToolTip="Type a command and press Enter or Send"
+                                 KeyDown="TextCommandInput_KeyDown"/>
+                        <Button Grid.Column="1"
+                                x:Name="TextCommandSendButton"
+                                Content="▶"
+                                Width="36" Height="32"
+                                Margin="6,0,0,0"
+                                Background="{DynamicResource PrimaryGradientBrush}"
+                                Foreground="White"
+                                BorderThickness="0"
+                                FontSize="14"
+                                Cursor="Hand"
+                                ToolTip="Send command"
+                                Click="TextCommandSend_Click">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="{TemplateBinding Background}"
+                                            CornerRadius="6"
+                                            Padding="4">
+                                        <TextBlock Text="{TemplateBinding Content}"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"/>
+                                    </Border>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                    </Grid>
                 </Grid>
             </Border>
 
@@ -416,8 +553,61 @@
                 </StackPanel>
             </Border>
 
+            <!-- PIN Security Panel — shown when dangerous command needs confirmation -->
+            <Border x:Name="PinSecurityPanel"
+                    Grid.Row="6"
+                    Visibility="Collapsed"
+                    Background="#FFF3CD"
+                    BorderBrush="#FFC107"
+                    BorderThickness="2"
+                    CornerRadius="8"
+                    Padding="15,10"
+                    Margin="10,5">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <TextBlock x:Name="PinWarningText"
+                                   Text="⚠️ Security required for this operation"
+                                   FontWeight="SemiBold"
+                                   Foreground="#856404"
+                                   FontSize="12"
+                                   TextWrapping="Wrap"/>
+                        <TextBlock x:Name="PinCodeDisplay"
+                                   Text=""
+                                   FontSize="11"
+                                   Foreground="#856404"
+                                   Margin="0,3,0,0"/>
+                    </StackPanel>
+                    <TextBox x:Name="PinInputBox"
+                             Grid.Column="1"
+                             Width="120"
+                             Margin="10,0"
+                             Padding="8,6"
+                             MaxLength="6"
+                             FontSize="16"
+                             FontWeight="Bold"
+                             TextAlignment="Center"
+                             ToolTip="Enter 6-digit security code"
+                             />
+                    <Button x:Name="PinConfirmButton"
+                            Grid.Column="2"
+                            Content="Confirm"
+                            Background="#28A745"
+                            Foreground="White"
+                            BorderThickness="0"
+                            Padding="12,6"
+                            FontWeight="SemiBold"
+                            Cursor="Hand"
+                            />
+                </Grid>
+            </Border>
+
             <!-- Control buttons -->
-            <Grid Grid.Row="6" Margin="20,5,20,15">
+            <Grid Grid.Row="7" Margin="20,5,20,15">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>

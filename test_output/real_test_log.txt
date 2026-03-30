@@ -1,8 +1,8 @@
 ======================================================================
   AICompanion Real E2E Test Log
-  Started : 2026-03-30 22:23:31
-  Finished: 2026-03-30 22:28:04
-  Result  : 13/14 PASSED
+  Started : 2026-03-30 22:50:25
+  Finished: 2026-03-30 22:54:56
+  Result  : 11/14 PASSED
 ======================================================================
 
 ── Detailed Results ──
@@ -19,20 +19,20 @@
          Evidence  : count stayed 0
          Screenshot: C:\Users\yyurc\Desktop\IBM PROJECT\AICompanion\test_output\screenshot_T3_word_no_duplicate.png
 
-[PASS]  T4 — Write essay in Word
-         Evidence  : activity confirms write
+[FAIL]  T4 — Write essay in Word
+         Evidence  : docx has content (1516 chars) but Word window not visible
          Screenshot: C:\Users\yyurc\Desktop\IBM PROJECT\AICompanion\test_output\screenshot_T4_word_essay.png
 
 [PASS]  T5 — Create new notebook
          Evidence  : activity confirms notebook
          Screenshot: C:\Users\yyurc\Desktop\IBM PROJECT\AICompanion\test_output\screenshot_T5_create_notebook.png
 
-[PASS]  T6 — Write poem in Notepad
-         Evidence  : activity confirms write
+[FAIL]  T6 — Write poem in Notepad
+         Evidence  : txt has content (1857 chars) but Notepad window not visible
          Screenshot: C:\Users\yyurc\Desktop\IBM PROJECT\AICompanion\test_output\screenshot_T6_notepad_poem.png
 
 [PASS]  T7 — Open Calculator
-         Evidence  : calc count 0→0
+         Evidence  : calc count 1→0
          Screenshot: C:\Users\yyurc\Desktop\IBM PROJECT\AICompanion\test_output\screenshot_T7_calculator.png
 
 [FAIL]  T8 — Calculate 99×7=693
@@ -65,88 +65,92 @@
 
 ── Timeline ──
 
-[22:23:31] ============================================================
-[22:23:31]   AICompanion Real E2E Tests  (pywinauto + UIA backend)
-[22:23:31] ============================================================
-[22:23:31]   Launching: C:\Users\yyurc\Desktop\IBM PROJECT\AICompanion\src\AICompanion.Desktop\bin\Release\net8.0-windows\AICompanion.exe
-[22:23:31]   Waiting up to 25s for main window…
-[22:23:33]   Window found: 'AI Companion'
-[22:23:35] 
+[22:50:25] ============================================================
+[22:50:25]   AICompanion Real E2E Tests  (pywinauto + UIA backend)
+[22:50:25] ============================================================
+[22:50:25]   Launching: C:\Users\yyurc\Desktop\IBM PROJECT\AICompanion\src\AICompanion.Desktop\bin\Release\net8.0-windows\AICompanion.exe
+[22:50:25]   Waiting up to 25s for main window…
+[22:50:27]   Window found: 'AI Companion'
+[22:50:29] 
 ▶ T1: App launches
-[22:23:35]   📸 screenshot_T1_app_launch.png  (370,251 bytes)
-[22:23:35]   ✅ PASS  T1 — App launches  [title='AI Companion']
-[22:23:35] 
+[22:50:29]   📸 screenshot_T1_app_launch.png  (379,102 bytes)
+[22:50:29]   ✅ PASS  T1 — App launches  [title='AI Companion']
+[22:50:29] 
 ▶ T2: Open Word
-[22:23:37]   → Sent: 'open word document'
-[22:23:54]   📸 screenshot_T2_open_word.png  (378,684 bytes)
-[22:23:54]   ✅ PASS  T2 — Open Word  [activity log mentions word]
-[22:23:54] 
+[22:50:32]   → Sent: 'open word document'
+[22:50:49]   📸 screenshot_T2_open_word.png  (384,687 bytes)
+[22:50:49]   ✅ PASS  T2 — Open Word  [activity log mentions word]
+[22:50:49] 
 ▶ T3: Word reuse — no duplicate
-[22:23:55]   → Sent: 'open word document'
-[22:24:07]   📸 screenshot_T3_word_no_duplicate.png  (381,321 bytes)
-[22:24:07]   ✅ PASS  T3 — Word reuse — no duplicate  [count stayed 0]
-[22:24:07] 
+[22:50:50]   → Sent: 'open word document'
+[22:51:02]   📸 screenshot_T3_word_no_duplicate.png  (383,891 bytes)
+[22:51:02]   ✅ PASS  T3 — Word reuse — no duplicate  [count stayed 0]
+[22:51:02] 
 ▶ T4: Write essay in Word
-[22:24:08]   → Sent: 'open word document'
-[22:24:21]   → Sent: 'write essay about the history of aviation in Word'
-[22:24:50]   📸 screenshot_T4_word_essay.png  (383,454 bytes)
-[22:24:51]   ✅ PASS  T4 — Write essay in Word  [activity confirms write]
-[22:24:51] 
+[22:51:04]   → Sent: 'write essay about the history of aviation in Word'
+[22:51:42]   📸 screenshot_T4_word_essay.png  (382,225 bytes)
+[22:51:42]   ⚠ No Word window found
+[22:51:42]   📄 docx: essay_baku_20260330_153649.docx  (1516 chars)
+[22:51:42]   📄 content snippet: "Baku, the capital city of Azerbaijan, is a captivating blend of ancient history and modern innovation. Nestled along the Caspian Sea, it offers a unique coastal-inland contrast that shapes its culture and landscape. The city's rich history dates back"
+[22:51:42]   ❌ FAIL  T4 — Write essay in Word  [docx has content (1516 chars) but Word window not visible]
+[22:51:42] 
 ▶ T5: Create notebook
-[22:24:52]   → Sent: 'create new notebook'
-[22:25:09]   📸 screenshot_T5_create_notebook.png  (380,564 bytes)
-[22:25:09]   ✅ PASS  T5 — Create new notebook  [activity confirms notebook]
-[22:25:09] 
+[22:51:43]   → Sent: 'create new notebook'
+[22:52:00]   📸 screenshot_T5_create_notebook.png  (368,596 bytes)
+[22:52:01]   ✅ PASS  T5 — Create new notebook  [activity confirms notebook]
+[22:52:01] 
 ▶ T6: Write poem in Notepad
-[22:25:10]   → Sent: 'create new notebook'
-[22:25:23]   → Sent: 'write a short poem about the ocean'
-[22:25:46]   📸 screenshot_T6_notepad_poem.png  (370,359 bytes)
-[22:25:46]   ✅ PASS  T6 — Write poem in Notepad  [activity confirms write]
-[22:25:46] 
+[22:52:02]   → Sent: 'write a short poem about the ocean in notepad'
+[22:52:37]   📸 screenshot_T6_notepad_poem.png  (375,929 bytes)
+[22:52:37]   ⚠ No Notepad window found
+[22:52:37]   📄 txt: note_20260330_202418.txt  (1857 chars)
+[22:52:37]   📄 content snippet: "\ufeffSpace is the vast expanse that exists beyond Earth's atmosphere. It is a domain of exploration, discovery, and wonder. Space is not a vacuum but rather a complex environment composed of various celestial bodies, including planets, stars, galaxies, a"
+[22:52:37]   ❌ FAIL  T6 — Write poem in Notepad  [txt has content (1857 chars) but Notepad window not visible]
+[22:52:37] 
 ▶ T7: Open Calculator
-[22:25:47]   → Sent: 'open calculator'
-[22:25:59]   📸 screenshot_T7_calculator.png  (380,009 bytes)
-[22:25:59]   ✅ PASS  T7 — Open Calculator  [calc count 0→0]
-[22:25:59] 
+[22:52:38]   → Sent: 'open calculator'
+[22:52:51]   📸 screenshot_T7_calculator.png  (374,256 bytes)
+[22:52:51]   ✅ PASS  T7 — Open Calculator  [calc count 1→0]
+[22:52:51] 
 ▶ T8: Calculate 99×7=693
-[22:26:00]   → Sent: 'calculate 99 times 7'
-[22:26:15]   📸 screenshot_T8_calculate_99x7.png  (382,736 bytes)
-[22:26:16]   Calculator all-text snippet: 'Calculator\nSystem\nSystem\nMinimise Calculator\nMaximise Calculator\nClose Calculator'
-[22:26:16]   CalculatorResults descendants lookup: IUIA.build_condition() got an unexpected keyword argument 'auto_id'
-[22:26:16]   ❌ FAIL  T8 — Calculate 99×7=693  [Calculator text: 'Calculator\nSystem\nSystem\nMinimise Calculator\nMaximise Calculator\nClose Calculator']
-[22:26:16] 
+[22:52:51]   → Sent: 'calculate 99 times 7'
+[22:53:07]   📸 screenshot_T8_calculate_99x7.png  (372,594 bytes)
+[22:53:07]   Calculator all-text snippet: 'Calculator\nSystem\nSystem\nMinimise Calculator\nMaximise Calculator\nClose Calculator'
+[22:53:07]   CalculatorResults descendants lookup: IUIA.build_condition() got an unexpected keyword argument 'auto_id'
+[22:53:07]   ❌ FAIL  T8 — Calculate 99×7=693  [Calculator text: 'Calculator\nSystem\nSystem\nMinimise Calculator\nMaximise Calculator\nClose Calculator']
+[22:53:07] 
 ▶ T9: New Word document
-[22:26:17]   → Sent: 'create a new word document'
-[22:26:29]   📸 screenshot_T9_new_word_doc.png  (375,964 bytes)
-[22:26:29]   ✅ PASS  T9 — New Word document  [activity confirms new doc]
-[22:26:29] 
+[22:53:08]   → Sent: 'create a new word document'
+[22:53:20]   📸 screenshot_T9_new_word_doc.png  (376,722 bytes)
+[22:53:20]   ✅ PASS  T9 — New Word document  [activity confirms new doc]
+[22:53:20] 
 ▶ T10: Chat response non-empty
-[22:26:30]   → Sent: 'what can you do?'
-[22:26:38]   📸 screenshot_T10_what_can_you_do.png  (372,019 bytes)
-[22:26:38]   Full activity length: 691 chars; snippet: 'ngs\n🔊 Text-to-Speech\nElevenLabs (Premium) ✓\n🔊 Test\n🔊 Test\nQuick Commands\n� Word\n� Word\n�📝 Notepad\n�📝 Notepad\n🔢 Calculator\n🔢 Calculator\n🌐 Browser\n🌐 Browser\n📁 Explorer\n📁 Explorer\n🎓 Tutorial\n🎓 Tutorial\n✓'
-[22:26:38]   ✅ PASS  T10 — Chat response non-empty  [keywords=['command', 'calc', 'read', 'word', 'notepad'], len=691]
-[22:26:38] 
+[22:53:21]   → Sent: 'what can you do?'
+[22:53:30]   📸 screenshot_T10_what_can_you_do.png  (372,670 bytes)
+[22:53:30]   Full activity length: 691 chars; snippet: 'ngs\n🔊 Text-to-Speech\nElevenLabs (Premium) ✓\n🔊 Test\n🔊 Test\nQuick Commands\n� Word\n� Word\n�📝 Notepad\n�📝 Notepad\n🔢 Calculator\n🔢 Calculator\n🌐 Browser\n🌐 Browser\n📁 Explorer\n📁 Explorer\n🎓 Tutorial\n🎓 Tutorial\n✓'
+[22:53:30]   ✅ PASS  T10 — Chat response non-empty  [keywords=['command', 'calc', 'read', 'word', 'notepad'], len=691]
+[22:53:30] 
 ▶ T11: Context awareness
-[22:26:39]   → Sent: 'open word document'
-[22:26:52]   → Sent: 'write a paragraph about mountains'
-[22:27:16]   📸 screenshot_T11_context_word.png  (374,803 bytes)
-[22:27:16]   ✅ PASS  T11 — Context awareness — write paragraph  [activity confirms insert]
-[22:27:16] 
+[22:53:31]   → Sent: 'open word document'
+[22:53:43]   → Sent: 'write a paragraph about mountains'
+[22:54:08]   📸 screenshot_T11_context_word.png  (374,285 bytes)
+[22:54:08]   ✅ PASS  T11 — Context awareness — write paragraph  [activity confirms insert]
+[22:54:08] 
 ▶ T12: Close all
-[22:27:17]   → Sent: 'close word'
-[22:27:30]   → Sent: 'close calculator'
-[22:27:35]   📸 screenshot_T12_close_all.png  (372,538 bytes)
-[22:27:36]   ✅ PASS  T12 — Close all  [word 0→0, calc 0→0]
-[22:27:36] 
+[22:54:09]   → Sent: 'close word'
+[22:54:22]   → Sent: 'close calculator'
+[22:54:27]   📸 screenshot_T12_close_all.png  (385,406 bytes)
+[22:54:27]   ✅ PASS  T12 — Close all  [word 0→0, calc 0→0]
+[22:54:27] 
 ▶ T13: BONUS: OCR read screen
-[22:27:37]   → Sent: 'read screen'
-[22:27:48]   📸 screenshot_T13_read_screen.png  (378,564 bytes)
-[22:27:48]   Full activity snippet (last 300): 'e quick commands.\nVoice Settings\n🎙️ Speech Recognition\nElevenLabs STT (Cloud) ✓\n⚙️ Settings\n⚙️ Settings\n🔊 Text-to-Speech\nElevenLabs (Premium) ✓\n🔊 Test\n🔊 Test\nQuick Commands\n� Word\n� Word\n�📝 Notepad\n�📝 Notepad\n🔢 Calculator\n🔢 Calculator\n🌐 Browser\n🌐 Browser\n📁 Explorer\n📁 Explorer\n🎓 Tutorial\n🎓 Tutorial\n✓'
-[22:27:48]   ✅ PASS  T13 — BONUS: OCR read screen  [full text len=691]
-[22:27:48] 
+[22:54:28]   → Sent: 'read screen'
+[22:54:40]   📸 screenshot_T13_read_screen.png  (378,272 bytes)
+[22:54:40]   Full activity snippet (last 300): 'e quick commands.\nVoice Settings\n🎙️ Speech Recognition\nElevenLabs STT (Cloud) ✓\n⚙️ Settings\n⚙️ Settings\n🔊 Text-to-Speech\nElevenLabs (Premium) ✓\n🔊 Test\n🔊 Test\nQuick Commands\n� Word\n� Word\n�📝 Notepad\n�📝 Notepad\n🔢 Calculator\n🔢 Calculator\n🌐 Browser\n🌐 Browser\n📁 Explorer\n📁 Explorer\n🎓 Tutorial\n🎓 Tutorial\n✓'
+[22:54:40]   ✅ PASS  T13 — BONUS: OCR read screen  [full text len=691]
+[22:54:40] 
 ▶ T14: BONUS: Named document
-[22:27:49]   → Sent: 'create word document called mission_report'
-[22:28:04]   📸 screenshot_T14_named_document.png  (375,682 bytes)
-[22:28:04]   ✅ PASS  T14 — BONUS: Named document  [files: ['C:\\Users\\yyurc/Documents\\doc_20260330_135858.docx', 'C:\\Users\\yyurc/Documents\\doc_20260330_135908.docx', 'C:\\Users\\yyurc/Documents\\doc_20260330_135917.docx', 'C:\\Users\\yyurc/Documents\\doc_20260330_135927.docx', 'C:\\Users\\yyurc/Documents\\doc_20260330_135956.docx', 'C:\\Users\\yyurc/Documents\\doc_20260330_140005.docx', 'C:\\Users\\yyurc/Documents\\doc_20260330_140015.docx', 'C:\\Users\\yyurc/Documents\\doc_20260330_153633.docx']]
-[22:28:04] 
+[22:54:40]   → Sent: 'create word document called mission_report'
+[22:54:56]   📸 screenshot_T14_named_document.png  (377,766 bytes)
+[22:54:56]   ✅ PASS  T14 — BONUS: Named document  [files: ['C:\\Users\\yyurc/Documents\\doc_20260330_135858.docx', 'C:\\Users\\yyurc/Documents\\doc_20260330_135908.docx', 'C:\\Users\\yyurc/Documents\\doc_20260330_135917.docx', 'C:\\Users\\yyurc/Documents\\doc_20260330_135927.docx', 'C:\\Users\\yyurc/Documents\\doc_20260330_135956.docx', 'C:\\Users\\yyurc/Documents\\doc_20260330_140005.docx', 'C:\\Users\\yyurc/Documents\\doc_20260330_140015.docx', 'C:\\Users\\yyurc/Documents\\doc_20260330_153633.docx']]
+[22:54:56] 
   Cleaning up helper apps…
