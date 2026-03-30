@@ -1923,7 +1923,7 @@ Tip: 'How do I copy text?' gives detailed instructions.";
                 var candidateDirs = new[]
                 {
                     System.IO.Path.Combine(exeDir, "tessdata"),
-                    System.IO.Path.Combine(AppContext.BaseDirectory, "tessdata"),
+                    System.IO.Path.Combine(System.AppContext.BaseDirectory, "tessdata"),
                     System.IO.Path.Combine(
                         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                         "AICompanion", "tessdata"),
