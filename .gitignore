@@ -57,6 +57,9 @@ nCrunchTemp_*
 # Misc
 *.log
 *.tmp
+
+# Encrypted API key store — DPAPI blob, must never be committed
+keys.dat
 *.temp
 .DS_Store
 Thumbs.db

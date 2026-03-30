@@ -17,6 +17,13 @@
     <Copyright>Copyright 2025</Copyright>
   </PropertyGroup>
 
+  <!-- Allow integration test project to access internal members (e.g. test DB constructor) -->
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>AICompanion.IntegrationTests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
     <PackageReference Include="Grpc.Net.Client" Version="2.59.0" />
