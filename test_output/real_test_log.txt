@@ -1,0 +1,152 @@
+======================================================================
+  AICompanion Real E2E Test Log
+  Started : 2026-03-30 22:23:31
+  Finished: 2026-03-30 22:28:04
+  Result  : 13/14 PASSED
+======================================================================
+
+── Detailed Results ──
+
+[PASS]  T1 — App launches
+         Evidence  : title='AI Companion'
+         Screenshot: C:\Users\yyurc\Desktop\IBM PROJECT\AICompanion\test_output\screenshot_T1_app_launch.png
+
+[PASS]  T2 — Open Word
+         Evidence  : activity log mentions word
+         Screenshot: C:\Users\yyurc\Desktop\IBM PROJECT\AICompanion\test_output\screenshot_T2_open_word.png
+
+[PASS]  T3 — Word reuse — no duplicate
+         Evidence  : count stayed 0
+         Screenshot: C:\Users\yyurc\Desktop\IBM PROJECT\AICompanion\test_output\screenshot_T3_word_no_duplicate.png
+
+[PASS]  T4 — Write essay in Word
+         Evidence  : activity confirms write
+         Screenshot: C:\Users\yyurc\Desktop\IBM PROJECT\AICompanion\test_output\screenshot_T4_word_essay.png
+
+[PASS]  T5 — Create new notebook
+         Evidence  : activity confirms notebook
+         Screenshot: C:\Users\yyurc\Desktop\IBM PROJECT\AICompanion\test_output\screenshot_T5_create_notebook.png
+
+[PASS]  T6 — Write poem in Notepad
+         Evidence  : activity confirms write
+         Screenshot: C:\Users\yyurc\Desktop\IBM PROJECT\AICompanion\test_output\screenshot_T6_notepad_poem.png
+
+[PASS]  T7 — Open Calculator
+         Evidence  : calc count 0→0
+         Screenshot: C:\Users\yyurc\Desktop\IBM PROJECT\AICompanion\test_output\screenshot_T7_calculator.png
+
+[FAIL]  T8 — Calculate 99×7=693
+         Evidence  : Calculator text: 'Calculator\nSystem\nSystem\nMinimise Calculator\nMaximise Calculator\nClose Calculator'
+         Screenshot: C:\Users\yyurc\Desktop\IBM PROJECT\AICompanion\test_output\screenshot_T8_calculate_99x7.png
+
+[PASS]  T9 — New Word document
+         Evidence  : activity confirms new doc
+         Screenshot: C:\Users\yyurc\Desktop\IBM PROJECT\AICompanion\test_output\screenshot_T9_new_word_doc.png
+
+[PASS]  T10 — Chat response non-empty
+         Evidence  : keywords=['command', 'calc', 'read', 'word', 'notepad'], len=691
+         Screenshot: C:\Users\yyurc\Desktop\IBM PROJECT\AICompanion\test_output\screenshot_T10_what_can_you_do.png
+
+[PASS]  T11 — Context awareness — write paragraph
+         Evidence  : activity confirms insert
+         Screenshot: C:\Users\yyurc\Desktop\IBM PROJECT\AICompanion\test_output\screenshot_T11_context_word.png
+
+[PASS]  T12 — Close all
+         Evidence  : word 0→0, calc 0→0
+         Screenshot: C:\Users\yyurc\Desktop\IBM PROJECT\AICompanion\test_output\screenshot_T12_close_all.png
+
+[PASS]  T13 — BONUS: OCR read screen
+         Evidence  : full text len=691
+         Screenshot: C:\Users\yyurc\Desktop\IBM PROJECT\AICompanion\test_output\screenshot_T13_read_screen.png
+
+[PASS]  T14 — BONUS: Named document
+         Evidence  : files: ['C:\\Users\\yyurc/Documents\\doc_20260330_135858.docx', 'C:\\Users\\yyurc/Documents\\doc_20260330_135908.docx', 'C:\\Users\\yyurc/Documents\\doc_20260330_135917.docx', 'C:\\Users\\yyurc/Documents\\doc_20260330_135927.docx', 'C:\\Users\\yyurc/Documents\\doc_20260330_135956.docx', 'C:\\Users\\yyurc/Documents\\doc_20260330_140005.docx', 'C:\\Users\\yyurc/Documents\\doc_20260330_140015.docx', 'C:\\Users\\yyurc/Documents\\doc_20260330_153633.docx']
+         Screenshot: C:\Users\yyurc\Desktop\IBM PROJECT\AICompanion\test_output\screenshot_T14_named_document.png
+
+── Timeline ──
+
+[22:23:31] ============================================================
+[22:23:31]   AICompanion Real E2E Tests  (pywinauto + UIA backend)
+[22:23:31] ============================================================
+[22:23:31]   Launching: C:\Users\yyurc\Desktop\IBM PROJECT\AICompanion\src\AICompanion.Desktop\bin\Release\net8.0-windows\AICompanion.exe
+[22:23:31]   Waiting up to 25s for main window…
+[22:23:33]   Window found: 'AI Companion'
+[22:23:35] 
+▶ T1: App launches
+[22:23:35]   📸 screenshot_T1_app_launch.png  (370,251 bytes)
+[22:23:35]   ✅ PASS  T1 — App launches  [title='AI Companion']
+[22:23:35] 
+▶ T2: Open Word
+[22:23:37]   → Sent: 'open word document'
+[22:23:54]   📸 screenshot_T2_open_word.png  (378,684 bytes)
+[22:23:54]   ✅ PASS  T2 — Open Word  [activity log mentions word]
+[22:23:54] 
+▶ T3: Word reuse — no duplicate
+[22:23:55]   → Sent: 'open word document'
+[22:24:07]   📸 screenshot_T3_word_no_duplicate.png  (381,321 bytes)
+[22:24:07]   ✅ PASS  T3 — Word reuse — no duplicate  [count stayed 0]
+[22:24:07] 
+▶ T4: Write essay in Word
+[22:24:08]   → Sent: 'open word document'
+[22:24:21]   → Sent: 'write essay about the history of aviation in Word'
+[22:24:50]   📸 screenshot_T4_word_essay.png  (383,454 bytes)
+[22:24:51]   ✅ PASS  T4 — Write essay in Word  [activity confirms write]
+[22:24:51] 
+▶ T5: Create notebook
+[22:24:52]   → Sent: 'create new notebook'
+[22:25:09]   📸 screenshot_T5_create_notebook.png  (380,564 bytes)
+[22:25:09]   ✅ PASS  T5 — Create new notebook  [activity confirms notebook]
+[22:25:09] 
+▶ T6: Write poem in Notepad
+[22:25:10]   → Sent: 'create new notebook'
+[22:25:23]   → Sent: 'write a short poem about the ocean'
+[22:25:46]   📸 screenshot_T6_notepad_poem.png  (370,359 bytes)
+[22:25:46]   ✅ PASS  T6 — Write poem in Notepad  [activity confirms write]
+[22:25:46] 
+▶ T7: Open Calculator
+[22:25:47]   → Sent: 'open calculator'
+[22:25:59]   📸 screenshot_T7_calculator.png  (380,009 bytes)
+[22:25:59]   ✅ PASS  T7 — Open Calculator  [calc count 0→0]
+[22:25:59] 
+▶ T8: Calculate 99×7=693
+[22:26:00]   → Sent: 'calculate 99 times 7'
+[22:26:15]   📸 screenshot_T8_calculate_99x7.png  (382,736 bytes)
+[22:26:16]   Calculator all-text snippet: 'Calculator\nSystem\nSystem\nMinimise Calculator\nMaximise Calculator\nClose Calculator'
+[22:26:16]   CalculatorResults descendants lookup: IUIA.build_condition() got an unexpected keyword argument 'auto_id'
+[22:26:16]   ❌ FAIL  T8 — Calculate 99×7=693  [Calculator text: 'Calculator\nSystem\nSystem\nMinimise Calculator\nMaximise Calculator\nClose Calculator']
+[22:26:16] 
+▶ T9: New Word document
+[22:26:17]   → Sent: 'create a new word document'
+[22:26:29]   📸 screenshot_T9_new_word_doc.png  (375,964 bytes)
+[22:26:29]   ✅ PASS  T9 — New Word document  [activity confirms new doc]
+[22:26:29] 
+▶ T10: Chat response non-empty
+[22:26:30]   → Sent: 'what can you do?'
+[22:26:38]   📸 screenshot_T10_what_can_you_do.png  (372,019 bytes)
+[22:26:38]   Full activity length: 691 chars; snippet: 'ngs\n🔊 Text-to-Speech\nElevenLabs (Premium) ✓\n🔊 Test\n🔊 Test\nQuick Commands\n� Word\n� Word\n�📝 Notepad\n�📝 Notepad\n🔢 Calculator\n🔢 Calculator\n🌐 Browser\n🌐 Browser\n📁 Explorer\n📁 Explorer\n🎓 Tutorial\n🎓 Tutorial\n✓'
+[22:26:38]   ✅ PASS  T10 — Chat response non-empty  [keywords=['command', 'calc', 'read', 'word', 'notepad'], len=691]
+[22:26:38] 
+▶ T11: Context awareness
+[22:26:39]   → Sent: 'open word document'
+[22:26:52]   → Sent: 'write a paragraph about mountains'
+[22:27:16]   📸 screenshot_T11_context_word.png  (374,803 bytes)
+[22:27:16]   ✅ PASS  T11 — Context awareness — write paragraph  [activity confirms insert]
+[22:27:16] 
+▶ T12: Close all
+[22:27:17]   → Sent: 'close word'
+[22:27:30]   → Sent: 'close calculator'
+[22:27:35]   📸 screenshot_T12_close_all.png  (372,538 bytes)
+[22:27:36]   ✅ PASS  T12 — Close all  [word 0→0, calc 0→0]
+[22:27:36] 
+▶ T13: BONUS: OCR read screen
+[22:27:37]   → Sent: 'read screen'
+[22:27:48]   📸 screenshot_T13_read_screen.png  (378,564 bytes)
+[22:27:48]   Full activity snippet (last 300): 'e quick commands.\nVoice Settings\n🎙️ Speech Recognition\nElevenLabs STT (Cloud) ✓\n⚙️ Settings\n⚙️ Settings\n🔊 Text-to-Speech\nElevenLabs (Premium) ✓\n🔊 Test\n🔊 Test\nQuick Commands\n� Word\n� Word\n�📝 Notepad\n�📝 Notepad\n🔢 Calculator\n🔢 Calculator\n🌐 Browser\n🌐 Browser\n📁 Explorer\n📁 Explorer\n🎓 Tutorial\n🎓 Tutorial\n✓'
+[22:27:48]   ✅ PASS  T13 — BONUS: OCR read screen  [full text len=691]
+[22:27:48] 
+▶ T14: BONUS: Named document
+[22:27:49]   → Sent: 'create word document called mission_report'
+[22:28:04]   📸 screenshot_T14_named_document.png  (375,682 bytes)
+[22:28:04]   ✅ PASS  T14 — BONUS: Named document  [files: ['C:\\Users\\yyurc/Documents\\doc_20260330_135858.docx', 'C:\\Users\\yyurc/Documents\\doc_20260330_135908.docx', 'C:\\Users\\yyurc/Documents\\doc_20260330_135917.docx', 'C:\\Users\\yyurc/Documents\\doc_20260330_135927.docx', 'C:\\Users\\yyurc/Documents\\doc_20260330_135956.docx', 'C:\\Users\\yyurc/Documents\\doc_20260330_140005.docx', 'C:\\Users\\yyurc/Documents\\doc_20260330_140015.docx', 'C:\\Users\\yyurc/Documents\\doc_20260330_153633.docx']]
+[22:28:04] 
+  Cleaning up helper apps…
