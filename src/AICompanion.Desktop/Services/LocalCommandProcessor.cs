@@ -115,6 +115,8 @@ namespace AICompanion.Desktop.Services
             // ── Inline symbolic math (local DataTable.Compute — no Calculator window) ──
             (new Regex(@"^([\d\s\+\-\*\/\.\(\)]+(?:\s*[\+\-\*\/]\s*[\d\s\.\(\)]+)+)$", RegexOptions.IgnoreCase), "math_expr"),
             (new Regex(@"^([\d\s\+\-\*\/\.\(\)]+)=\s*\??\s*$", RegexOptions.IgnoreCase), "math_expr"),
+            // ── OCR / read screen ────────────────────────────────────────────────────
+            (new Regex(@"(?:read\s+(?:the\s+)?screen|ocr|what\s+does\s+(?:this|the\s+screen)\s+say|scan\s+screen|read\s+text)", RegexOptions.IgnoreCase), "ocr"),
         ];
 
         // ── App name dictionary ──────────────────────────────────────────────────
@@ -462,12 +464,12 @@ namespace AICompanion.Desktop.Services
                 var responseJson = response.Content.ReadAsStringAsync().Result;
                 using var doc = System.Text.Json.JsonDocument.Parse(responseJson);
                 var root   = doc.RootElement;
-                var action  = root.GetProperty("action").GetString() ?? "unknown";
-                var target  = root.TryGetProperty("target", out var t) ? t.GetString() : null;
-                var @params = root.TryGetProperty("params", out var p) ? p.GetString() : null;
-                var query   = target ?? @params;  // prefer target; fall back to params
+                var action = root.GetProperty("action").GetString() ?? "unknown";
+                var target = root.TryGetProperty("target", out var t) ? t.GetString() : null;
+                var text   = root.TryGetProperty("text",   out var tx) ? tx.GetString() : null;
+                var query  = target ?? text;  // prefer target; fall back to text
 
-                _logger?.LogInformation("[AI-FALLBACK] action={A}, target={T}, params={P}", action, target, @params);
+                _logger?.LogInformation("[AI-FALLBACK] action={A}, target={T}, text={X}", action, target, text);
 
                 return action switch
                 {
@@ -602,6 +604,7 @@ namespace AICompanion.Desktop.Services
                         "calc_app"       => ExecuteCalculation(m.Groups[1].Value.Trim()),
                         "calc_type"      => ExecuteCalcType(m.Groups[1].Value.Trim()),
                         "math_expr"      => EvalMath(m.Groups[1].Value.Trim()),
+                        "ocr"            => ExecuteOcr(),
                         _                => null,
                     };
                 }
@@ -663,31 +666,62 @@ namespace AICompanion.Desktop.Services
 
         // ── Command executors ────────────────────────────────────────────────────
 
+        // ── Process-name stems for GetProcessesByName checks ──────────────────
+        private static readonly Dictionary<string, string[]> _processStems =
+            new(StringComparer.OrdinalIgnoreCase)
+        {
+            { "WINWORD",    new[] { "WINWORD"  } },
+            { "notepad",    new[] { "notepad"  } },
+            { "calc",       new[] { "CalculatorApp", "calc" } },
+            { "msedge",     new[] { "msedge"   } },
+            { "explorer",   new[] { "explorer" } },
+            { "EXCEL",      new[] { "EXCEL"    } },
+            { "mspaint",    new[] { "mspaint"  } },
+            { "chrome",     new[] { "chrome"   } },
+            { "firefox",    new[] { "firefox"  } },
+        };
+
+        /// <summary>Returns true if at least one process with the given executable is running.</summary>
+        private static bool IsProcessRunning(string processName)
+        {
+            if (_processStems.TryGetValue(processName, out var stems))
+            {
+                foreach (var s in stems)
+                    if (SysProcess.GetProcessesByName(s).Length > 0) return true;
+                return false;
+            }
+            var stem = System.IO.Path.GetFileNameWithoutExtension(processName);
+            return SysProcess.GetProcessesByName(stem).Length > 0
+                || SysProcess.GetProcessesByName(processName).Length > 0;
+        }
+
         private CommandResult ExecuteOpenApp(string appName)
         {
             var cleaned = Regex.Replace(appName.Trim().ToLowerInvariant(), @"^(the|a|an)\s+", "");
             // Also strip Russian articles/possessives
             cleaned = Regex.Replace(cleaned, @"^(мой|моё|мою|новый|новую|новое)\s+", "");
 
+            // "open new X" → user explicitly wants a NEW instance, not reuse
+            bool wantsNew = cleaned.StartsWith("new ", StringComparison.OrdinalIgnoreCase)
+                         || cleaned.Contains(" new ", StringComparison.OrdinalIgnoreCase);
+
+            // Strip "new" prefix so we can still resolve the app name
+            var resolveTarget = Regex.Replace(cleaned, @"^new\s+", "", RegexOptions.IgnoreCase).Trim();
+
             string? processName = null;
-            if (_appMappings.TryGetValue(cleaned, out var mapped))
+            foreach (var candidate in new[] { cleaned, resolveTarget })
             {
-                processName = mapped;
-            }
-            else
-            {
-                // Try single-word lookup — handle "ворд документ" → try first word "ворд"
-                var firstWord = cleaned.Split(' ')[0];
-                if (firstWord != cleaned && _appMappings.TryGetValue(firstWord, out var firstWordMapped))
-                {
-                    processName = firstWordMapped;
-                    _logger?.LogInformation("[APP] First-word match: '{W}' → '{P}'", firstWord, processName);
-                }
+                if (_appMappings.TryGetValue(candidate, out var mapped))
+                { processName = mapped; break; }
+
+                var firstWord = candidate.Split(' ')[0];
+                if (firstWord != candidate && _appMappings.TryGetValue(firstWord, out var fwm))
+                { processName = fwm; break; }
             }
 
             if (processName == null)
             {
-                var bestMatch = FuzzyProcess.ExtractOne(cleaned, _appMappings.Keys.ToList());
+                var bestMatch = FuzzyProcess.ExtractOne(resolveTarget, _appMappings.Keys.ToList());
                 if (bestMatch?.Score >= 80)
                 {
                     processName = _appMappings[bestMatch.Value];
@@ -702,21 +736,34 @@ namespace AICompanion.Desktop.Services
                 return AgenticPlanRequired;
             }
 
-            var friendly     = _friendlyNames.TryGetValue(processName, out var fn) ? fn : processName;
-            var existingHwnd = FindWindowByProcessOrTitle(processName);
-
-            if (existingHwnd != IntPtr.Zero)
+            // "open new X" → always create a new document/window
+            if (wantsNew)
             {
-                ShowWindow(existingHwnd, 9 /* SW_RESTORE */);
-                SetForegroundWindow(existingHwnd);
-                _lastOpenedApp  = friendly;
-                _currentContext = ResolveContext(processName);
-                return new CommandResult(true, $"Switched to {friendly}", $"Switched to the open {friendly} window.");
+                _logger?.LogInformation("[APP] 'new' keyword detected — creating new doc for '{P}'", processName);
+                return ExecuteNewDocument(processName);
+            }
+
+            var friendly = _friendlyNames.TryGetValue(processName, out var fn) ? fn : processName;
+
+            // Check if process is running (fast path via GetProcessesByName)
+            if (IsProcessRunning(processName))
+            {
+                // Find the window handle to bring it to front
+                var existingHwnd = FindWindowByProcessOrTitle(processName);
+                if (existingHwnd != IntPtr.Zero)
+                {
+                    ShowWindow(existingHwnd, 9 /* SW_RESTORE */);
+                    SetForegroundWindow(existingHwnd);
+                    _lastOpenedApp  = friendly;
+                    _currentContext = ResolveContext(processName);
+                    _logger?.LogInformation("[APP] Reused running process '{P}' — brought to front", processName);
+                    return new CommandResult(true, $"Switched to {friendly}", $"Switched to the open {friendly} window.");
+                }
             }
 
             try
             {
-                System.Diagnostics.Process.Start(new ProcessStartInfo { FileName = processName, UseShellExecute = true });
+                SysProcess.Start(new ProcessStartInfo { FileName = processName, UseShellExecute = true });
                 _lastOpenedApp  = friendly;
                 _currentContext = ResolveContext(processName);
                 return new CommandResult(true, $"Opened {friendly}", $"Opening {friendly} for you!");
@@ -765,7 +812,15 @@ namespace AICompanion.Desktop.Services
             return found;
         }
 
-        public string LastOpenedApp => _lastOpenedApp;
+        public string LastOpenedApp    => _lastOpenedApp;
+        public string CurrentContextName => _currentContext.ToString();
+
+        /// <summary>Restores the context saved in a previous session.</summary>
+        public void RestoreContext(string contextName)
+        {
+            if (Enum.TryParse<AppContext>(contextName, ignoreCase: true, out var ctx))
+                _currentContext = ctx;
+        }
 
         private CommandResult ExecuteNewDocument(string? explicitTarget = null)
         {
@@ -1854,6 +1909,80 @@ Tip: 'How do I copy text?' gives detailed instructions.";
                 name = name["Display is ".Length..];
 
             return name.Trim().Replace(",", "");
+        }
+
+        // ── OCR ──────────────────────────────────────────────────────────────────
+
+        private CommandResult ExecuteOcr()
+        {
+            try
+            {
+                // Locate tessdata — check next to the exe first, then a few fallback paths
+                var exeDir = System.IO.Path.GetDirectoryName(
+                    System.Reflection.Assembly.GetExecutingAssembly().Location) ?? "";
+                var candidateDirs = new[]
+                {
+                    System.IO.Path.Combine(exeDir, "tessdata"),
+                    System.IO.Path.Combine(AppContext.BaseDirectory, "tessdata"),
+                    System.IO.Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                        "AICompanion", "tessdata"),
+                    @"C:\tessdata",
+                };
+
+                string? tessDataPath = candidateDirs.FirstOrDefault(System.IO.Directory.Exists);
+                if (tessDataPath == null || !System.IO.File.Exists(System.IO.Path.Combine(tessDataPath, "eng.traineddata")))
+                {
+                    var msg = "Tesseract data not found. Download eng.traineddata from " +
+                              "https://github.com/tesseract-ocr/tessdata and place it in: " +
+                              System.IO.Path.Combine(exeDir, "tessdata", "eng.traineddata");
+                    _logger?.LogWarning("[OCR] tessdata not found — {Msg}", msg);
+                    return new CommandResult(false, "OCR: tessdata not found", msg);
+                }
+
+                // Capture full-screen screenshot into a memory bitmap
+                var screen = System.Windows.Forms.Screen.PrimaryScreen;
+                if (screen == null)
+                    return new CommandResult(false, "OCR: cannot detect screen", "Cannot detect screen size.");
+
+                var bounds = screen.Bounds;
+                using var bmp = new System.Drawing.Bitmap(bounds.Width, bounds.Height,
+                    System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                using (var g = System.Drawing.Graphics.FromImage(bmp))
+                    g.CopyFromScreen(bounds.Location, System.Drawing.Point.Empty, bounds.Size);
+
+                // Save to a temp file (Tesseract engine needs a file path or Pix)
+                var tmpPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+                    $"ocr_{DateTime.Now:yyyyMMdd_HHmmss}.png");
+                bmp.Save(tmpPath, System.Drawing.Imaging.ImageFormat.Png);
+
+                string extractedText;
+                using (var engine = new Tesseract.TesseractEngine(tessDataPath, "eng",
+                           Tesseract.EngineMode.Default))
+                using (var img = Tesseract.Pix.LoadFromFile(tmpPath))
+                using (var page = engine.Process(img))
+                {
+                    extractedText = page.GetText()?.Trim() ?? "";
+                }
+
+                try { System.IO.File.Delete(tmpPath); } catch { }
+
+                if (string.IsNullOrWhiteSpace(extractedText))
+                    return new CommandResult(true, "OCR: no text found",
+                        "I couldn't find any readable text on the screen.");
+
+                var preview = extractedText.Length > 300
+                    ? extractedText[..300] + "…"
+                    : extractedText;
+                _logger?.LogInformation("[OCR] Extracted {N} chars", extractedText.Length);
+                return new CommandResult(true, $"OCR result ({extractedText.Length} chars)", preview);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "[OCR] Failed");
+                return new CommandResult(false, $"OCR error: {ex.Message}",
+                    "Sorry, I encountered an error while reading the screen.");
+            }
         }
 
         private static string DetectProcessType(string title)

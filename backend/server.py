@@ -62,6 +62,60 @@ try:
 except Exception:
     _PYWINAUTO = False
 
+# ─── ChromaDB vector memory ───────────────────────────────────────────────────
+_CHROMADB = False
+_chroma_collection = None
+try:
+    import chromadb
+    from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
+    _chroma_ef = SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
+    _chroma_client = chromadb.PersistentClient(
+        path=str(pathlib.Path(__file__).parent / "chroma_db")
+    )
+    _chroma_collection = _chroma_client.get_or_create_collection(
+        "aicompanion_memory",
+        embedding_function=_chroma_ef,
+    )
+    _CHROMADB = True
+    log_init = logging.getLogger("granite")
+    log_init.info("ChromaDB loaded — collection 'aicompanion_memory' ready")
+except Exception as _ce:
+    logging.getLogger("granite").warning("ChromaDB unavailable (%s) — running without semantic memory", _ce)
+
+def _chroma_store(session_id: str, user_msg: str, assistant_reply: str) -> None:
+    """Store a Q/A pair as a ChromaDB embedding."""
+    if not _CHROMADB or _chroma_collection is None:
+        return
+    try:
+        doc_id = f"{session_id}_{int(time.time() * 1000)}"
+        _chroma_collection.add(
+            documents=[f"User: {user_msg}\nAssistant: {assistant_reply}"],
+            ids=[doc_id],
+            metadatas=[{"session_id": session_id, "ts": int(time.time())}],
+        )
+    except Exception as e:
+        logging.getLogger("granite").debug("ChromaDB store error: %s", e)
+
+def _chroma_query(user_msg: str, n_results: int = 3) -> str:
+    """Return top-N semantically similar past exchanges, formatted as context."""
+    if not _CHROMADB or _chroma_collection is None:
+        return ""
+    try:
+        count = _chroma_collection.count()
+        if count == 0:
+            return ""
+        results = _chroma_collection.query(
+            query_texts=[user_msg],
+            n_results=min(n_results, count),
+        )
+        docs = results.get("documents", [[]])[0]
+        if not docs:
+            return ""
+        return "Relevant past context:\n" + "\n---\n".join(docs) + "\n"
+    except Exception as e:
+        logging.getLogger("granite").debug("ChromaDB query error: %s", e)
+        return ""
+
 # Known Word installation paths (fallback when WINWORD.EXE not on PATH)
 _WORD_PATHS = [
     r"C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE",
@@ -1346,6 +1400,12 @@ def _build_chat_prompt(session_id: str, new_message: str, extra_history: list[di
     )
 
     lines = [system.strip(), ""]
+
+    # Inject semantically similar past exchanges from ChromaDB (top-3)
+    semantic_ctx = _chroma_query(new_message, n_results=3)
+    if semantic_ctx:
+        lines.append(semantic_ctx)
+
     for turn in combined:
         role_label = "User" if turn.get("role") == "user" else "Assistant"
         lines.append(f"{role_label}: {turn['content']}")
@@ -1358,13 +1418,18 @@ async def chat(req: ChatRequest):
     prompt = _build_chat_prompt(req.session_id, req.message, req.history)
     raw, ms = await granite_generate(prompt, temperature=0.5)
 
+    # Update in-memory session history (SQLite-backed via _append_memory)
     history = _chat_history.setdefault(req.session_id, [])
     history.append({"role": "user",      "content": req.message})
     history.append({"role": "assistant", "content": raw})
     if len(history) > _MAX_HISTORY_TURNS * 2:
         _chat_history[req.session_id] = history[-_MAX_HISTORY_TURNS * 2:]
 
+    # Persist to file-based memory (SQLite-style markdown log)
     _append_memory(req.session_id, req.message, raw)
+
+    # Store embedding in ChromaDB for future semantic retrieval
+    _chroma_store(req.session_id, req.message, raw)
 
     return ChatResponse(reply=raw, latency_ms=ms)
 
