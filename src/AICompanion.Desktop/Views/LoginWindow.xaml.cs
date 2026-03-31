@@ -262,9 +262,17 @@ namespace AICompanion.Desktop.Views
 
         private void ShowRegister_Click(object sender, RoutedEventArgs e)
         {
-            LoginPanel.Visibility = Visibility.Collapsed;
-            RegisterPanel.Visibility = Visibility.Visible;
-            RegisterUsernameBox.Focus();
+            // Open the dedicated RegisterWindow as a dialog.
+            // On success the user is redirected back to the login panel.
+            var registerWindow = new RegisterWindow();
+            registerWindow.Owner = this;
+            var result = registerWindow.ShowDialog();
+            if (result == true)
+            {
+                // Auto-fill the username so the user can log in immediately
+                // RegisterWindow.xaml.cs closes with DialogResult = true on success.
+                UsernameBox.Focus();
+            }
         }
 
         private void ShowLogin_Click(object sender, RoutedEventArgs e)

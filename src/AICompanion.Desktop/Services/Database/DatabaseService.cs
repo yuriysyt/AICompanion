@@ -125,6 +125,15 @@ namespace AICompanion.Desktop.Services.Database
                 @"ALTER TABLE Users ADD COLUMN Email TEXT",
                 // Migration: add HashAlgorithm column (for PBKDF2 upgrade tracking)
                 @"ALTER TABLE Users ADD COLUMN HashAlgorithm TEXT NOT NULL DEFAULT 'SHA256'",
+                // Migration: add PinHash column for quick-verify PIN
+                @"ALTER TABLE Users ADD COLUMN PinHash TEXT",
+
+                // Global (non-user) key-value settings (e.g. privacy consent)
+                @"CREATE TABLE IF NOT EXISTS GlobalSettings (
+                    Key TEXT PRIMARY KEY,
+                    Value TEXT NOT NULL,
+                    UpdatedAt TEXT NOT NULL
+                )",
 
                 // Persistent session tokens for Remember Me
                 @"CREATE TABLE IF NOT EXISTS SessionTokens (
@@ -678,6 +687,57 @@ namespace AICompanion.Desktop.Services.Database
             using var cmd = new SqliteCommand(sql, _connection);
             cmd.Parameters.AddWithValue("@id", aliasId);
             await cmd.ExecuteNonQueryAsync();
+        }
+
+        #endregion
+
+        #region PIN
+
+        public async Task SetUserPinAsync(int userId, string pinHash)
+        {
+            var sql = "UPDATE Users SET PinHash = @pinHash WHERE Id = @userId";
+            using var cmd = new SqliteCommand(sql, _connection);
+            cmd.Parameters.AddWithValue("@pinHash", pinHash);
+            cmd.Parameters.AddWithValue("@userId", userId);
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        #endregion
+
+        #region Global Settings
+
+        public async Task<string?> GetGlobalSettingAsync(string key)
+        {
+            var sql = "SELECT Value FROM GlobalSettings WHERE Key = @key";
+            using var cmd = new SqliteCommand(sql, _connection);
+            cmd.Parameters.AddWithValue("@key", key);
+            var result = await cmd.ExecuteScalarAsync();
+            return result?.ToString();
+        }
+
+        public async Task SetGlobalSettingAsync(string key, string value)
+        {
+            var sql = @"INSERT OR REPLACE INTO GlobalSettings (Key, Value, UpdatedAt)
+                        VALUES (@key, @value, @now)";
+            using var cmd = new SqliteCommand(sql, _connection);
+            cmd.Parameters.AddWithValue("@key", key);
+            cmd.Parameters.AddWithValue("@value", value);
+            cmd.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("O"));
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        /// <summary>Returns true if the user has already accepted the privacy policy.</summary>
+        public async Task<bool> HasAcceptedPrivacyPolicyAsync()
+        {
+            var val = await GetGlobalSettingAsync("privacy_accepted");
+            return val == "true";
+        }
+
+        /// <summary>Records that the user has accepted the privacy policy.</summary>
+        public async Task AcceptPrivacyPolicyAsync()
+        {
+            await SetGlobalSettingAsync("privacy_accepted", "true");
+            _logger?.LogInformation("[Database] Privacy policy accepted");
         }
 
         #endregion

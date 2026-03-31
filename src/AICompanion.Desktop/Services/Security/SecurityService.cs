@@ -249,6 +249,38 @@ namespace AICompanion.Desktop.Services.Security
             }
         }
 
+        /// <summary>
+        /// Registers a new user and stores a hashed PIN for quick verification.
+        /// Called by RegisterWindow.
+        /// </summary>
+        public async Task<AuthResult> RegisterWithPinAsync(string username, string email, string password, string pin)
+        {
+            // Register the user via the existing path
+            var result = await RegisterAsync(username, email, password);
+            if (!result.Success) return result;
+
+            // Hash and persist the PIN
+            try
+            {
+                var user = await _database.GetUserAsync(username);
+                if (user != null)
+                {
+                    var pinSalt = GenerateSalt();
+                    var pinHash = HashPassword(pin, pinSalt);
+                    // Store combined "hash:salt" so we can verify later
+                    await _database.SetUserPinAsync(user.Id, $"{pinHash}:{pinSalt}");
+                    _logger?.LogInformation("[Security] PIN stored for user {Username}", username);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Non-fatal: account was created but PIN storage failed
+                _logger?.LogWarning(ex, "[Security] Failed to store PIN for {Username}", username);
+            }
+
+            return result;
+        }
+
         public async Task<bool> ChangePasswordAsync(string oldPassword, string newPassword)
         {
             if (!IsAuthenticated) return false;

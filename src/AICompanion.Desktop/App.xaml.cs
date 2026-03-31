@@ -65,6 +65,29 @@ namespace AICompanion.Desktop
 
             ApplyThemeFromConfig();
 
+            // ── Privacy Policy gate (first run) ─────────────────────────────────
+            try
+            {
+                var dbService = ServiceProvider.GetRequiredService<DatabaseService>();
+                var accepted = Task.Run(() => dbService.HasAcceptedPrivacyPolicyAsync()).GetAwaiter().GetResult();
+                if (!accepted)
+                {
+                    var policyWindow = new PrivacyPolicyWindow();
+                    var agreed = policyWindow.ShowDialog();
+                    if (agreed != true || !policyWindow.Accepted)
+                    {
+                        Log.Information("User declined privacy policy — shutting down");
+                        Shutdown(0);
+                        return;
+                    }
+                    Log.Information("Privacy policy accepted");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Privacy policy check failed — continuing");
+            }
+
             // ── Multi-user login gate ────────────────────────────────────────────
             // Show LoginWindow if "RequireLogin" is enabled in settings.
             if (IsLoginRequired())
@@ -324,6 +347,9 @@ namespace AICompanion.Desktop
             services.AddSingleton<AIEngineClient>();
 
             services.AddSingleton<LocalCommandProcessor>();
+
+            services.AddSingleton<DataSanitizer>();
+            services.AddSingleton<ContextManager>();
 
             services.AddTransient<MainViewModel>();
         }
