@@ -65,10 +65,41 @@ namespace AICompanion.Desktop
 
             ApplyThemeFromConfig();
 
+            // ── Multi-user login gate ────────────────────────────────────────────
+            // Show LoginWindow if "RequireLogin" is enabled in settings.
+            if (IsLoginRequired())
+            {
+                var loginWindow = new LoginWindow();
+                var loggedIn = loginWindow.ShowDialog();
+                if (loggedIn != true || !loginWindow.IsAuthenticated)
+                {
+                    Log.Information("User cancelled login — shutting down");
+                    Shutdown(0);
+                    return;
+                }
+                Log.Information("User authenticated: {User}", loginWindow.AuthenticatedUser);
+            }
+
             var mainWindow = new MainWindow();
             MainWindow = mainWindow;
             mainWindow.Closed += (s, args) => Shutdown();
             mainWindow.Show();
+        }
+
+        private static bool IsLoginRequired()
+        {
+            try
+            {
+                var configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "appsettings.json");
+                if (!File.Exists(configPath)) return false;
+                var json = File.ReadAllText(configPath);
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("Security", out var security) &&
+                    security.TryGetProperty("RequireLogin", out var req))
+                    return req.GetBoolean();
+            }
+            catch { /* settings unreadable — don't block startup */ }
+            return false;
         }
 
         private void ApplyThemeFromConfig()
@@ -113,7 +144,21 @@ namespace AICompanion.Desktop
                 }
             }
 
-            if (theme == "Dark")
+            if (theme == "HighContrast")
+            {
+                // WCAG AA+ high-contrast palette: black background, white text,
+                // bright yellow accent — readable for users with visual impairments.
+                resources["PrimaryColor"]       = ColorFromHex("#FFFF00");
+                resources["SecondaryColor"]     = ColorFromHex("#00FFFF");
+                resources["BackgroundColor"]    = ColorFromHex("#000000");
+                resources["SurfaceColor"]       = ColorFromHex("#1A1A1A");
+                resources["TextPrimaryColor"]   = ColorFromHex("#FFFFFF");
+                resources["TextSecondaryColor"] = ColorFromHex("#FFFF00");
+                resources["SuccessColor"]       = ColorFromHex("#00FF00");
+                resources["ErrorColor"]         = ColorFromHex("#FF4444");
+                resources["WarningColor"]       = ColorFromHex("#FF8800");
+            }
+            else if (theme == "Dark")
             {
                 resources["PrimaryColor"] = ColorFromHex("#14B8A6");
                 resources["SecondaryColor"] = ColorFromHex("#2DD4BF");
@@ -147,7 +192,20 @@ namespace AICompanion.Desktop
             resources["SuccessBrush"] = new SolidColorBrush((WpfColor)resources["SuccessColor"]);
             resources["ErrorBrush"] = new SolidColorBrush((WpfColor)resources["ErrorColor"]);
 
-            if (theme == "Dark")
+            if (theme == "HighContrast")
+            {
+                resources["AvatarPanelBrush"]  = new SolidColorBrush(ColorFromHex("#000000"));
+                resources["CardPanelBrush"]    = new SolidColorBrush(ColorFromHex("#1A1A1A"));
+                resources["InputPanelBrush"]   = new SolidColorBrush(ColorFromHex("#000000"));
+                resources["LogPanelBrush"]     = new SolidColorBrush(ColorFromHex("#000000"));
+                resources["LogHeaderBrush"]    = new SolidColorBrush(ColorFromHex("#1A1A1A"));
+                resources["StatusPanelBrush"]  = new SolidColorBrush(ColorFromHex("#1A1A1A"));
+                resources["StatusBorderBrush"] = new SolidColorBrush(ColorFromHex("#FFFF00"));
+                resources["InputBorderBrush"]  = new SolidColorBrush(ColorFromHex("#FFFF00"));
+                resources["LogBorderBrush"]    = new SolidColorBrush(ColorFromHex("#FFFF00"));
+                resources["CardBorderBrush"]   = new SolidColorBrush(ColorFromHex("#FFFF00"));
+            }
+            else if (theme == "Dark")
             {
                 resources["AvatarPanelBrush"] = new SolidColorBrush(ColorFromHex("#1E2A3A"));
                 resources["CardPanelBrush"] = new SolidColorBrush(ColorFromHex("#2A2A48"));

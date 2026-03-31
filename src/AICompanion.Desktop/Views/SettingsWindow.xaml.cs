@@ -85,9 +85,10 @@ namespace AICompanion.Desktop.Views
                     {
                         // Theme radio buttons
                         var theme = appearance.TryGetProperty("Theme", out var themeProp) ? themeProp.GetString() ?? "Light" : "Light";
-                        ThemeLight.IsChecked = theme == "Light";
-                        ThemeDark.IsChecked = theme == "Dark";
-                        ThemeSystem.IsChecked = theme == "System";
+                        ThemeLight.IsChecked        = theme == "Light";
+                        ThemeDark.IsChecked         = theme == "Dark";
+                        ThemeSystem.IsChecked       = theme == "System";
+                        ThemeHighContrast.IsChecked = theme == "HighContrast";
 
                         AlwaysOnTopCheck.IsChecked = appearance.TryGetProperty("AlwaysOnTop", out var top) ? top.GetBoolean() : false;
                         MinimizeToTrayCheck.IsChecked = appearance.TryGetProperty("MinimizeToTray", out var tray) ? tray.GetBoolean() : false;
@@ -199,9 +200,14 @@ namespace AICompanion.Desktop.Views
                     TargetVSCode = TargetVSCodeCheck.IsChecked == true
                 };
 
+                var selectedThemeName = ThemeLight.IsChecked == true        ? "Light"
+                                      : ThemeDark.IsChecked == true         ? "Dark"
+                                      : ThemeHighContrast.IsChecked == true ? "HighContrast"
+                                      : "System";
+
                 existingConfig["Appearance"] = new
                 {
-                    Theme = ThemeLight.IsChecked == true ? "Light" : ThemeDark.IsChecked == true ? "Dark" : "System",
+                    Theme = selectedThemeName,
                     AlwaysOnTop = AlwaysOnTopCheck.IsChecked == true,
                     MinimizeToTray = MinimizeToTrayCheck.IsChecked == true,
                     StartMinimized = StartMinimizedCheck.IsChecked == true,
@@ -219,8 +225,7 @@ namespace AICompanion.Desktop.Views
                 await File.WriteAllTextAsync(configPath, json);
 
                 // Apply theme immediately
-                var selectedTheme = ThemeLight.IsChecked == true ? "Light" : ThemeDark.IsChecked == true ? "Dark" : "System";
-                App.ApplyTheme(selectedTheme);
+                App.ApplyTheme(selectedThemeName);
 
                 // Apply ElevenLabs configuration
                 if (_voiceManager != null)

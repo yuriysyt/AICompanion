@@ -53,6 +53,23 @@ namespace AICompanion.Desktop.Services
         private string _lastOpenedApp         = "";
         private string _lastTypedText         = "";
 
+        // ── Custom aliases (FR12) ────────────────────────────────────────────────
+        // Keyed by alias text (lowercased), value = actual command to execute.
+        // Populated by LoadAliases(); empty until the caller invokes it.
+        private readonly Dictionary<string, string> _aliases = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Loads custom voice aliases from the database.
+        /// Call once after sign-in (or after the user adds/removes aliases).
+        /// </summary>
+        public void LoadAliases(IEnumerable<AICompanion.Desktop.Services.Database.CommandAliasRecord> records)
+        {
+            _aliases.Clear();
+            foreach (var r in records)
+                _aliases[r.Alias] = r.ActualCommand;
+            _logger?.LogInformation("[ALIAS] Loaded {N} custom alias(es)", _aliases.Count);
+        }
+
         // ── Context tracking ─────────────────────────────────────────────────────
         private enum AppContext { None, Word, Notepad, Calculator, Browser }
         private AppContext _currentContext = AppContext.None;
@@ -447,6 +464,16 @@ namespace AICompanion.Desktop.Services
                 return new CommandResult(false, "Empty command", "");
 
             _logger?.LogInformation("Processing command: {Text}", text);
+
+            // ── Alias resolution (FR12) ──────────────────────────────────────────
+            // Check custom aliases before any regex routing. An alias substitutes the
+            // stored ActualCommand in place of the user-spoken phrase, then falls through
+            // to normal processing so all existing routes still apply.
+            if (_aliases.TryGetValue(text.Trim(), out var aliasTarget))
+            {
+                _logger?.LogInformation("[ALIAS] '{Input}' → '{Target}'", text, aliasTarget);
+                text = aliasTarget;
+            }
 
             if (IsComplexCommand(text))
             {

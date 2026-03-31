@@ -626,6 +626,62 @@ namespace AICompanion.Desktop.Services.Database
 
         #endregion
 
+        #region Command Aliases
+
+        /// <summary>Returns all aliases for the given user (null = global aliases).</summary>
+        public async Task<List<CommandAliasRecord>> GetAliasesAsync(int? userId = null)
+        {
+            var sql = userId.HasValue
+                ? "SELECT Id, UserId, Alias, ActualCommand, Description, CreatedAt FROM CommandAliases WHERE UserId = @uid OR UserId IS NULL ORDER BY Alias"
+                : "SELECT Id, UserId, Alias, ActualCommand, Description, CreatedAt FROM CommandAliases ORDER BY Alias";
+
+            var list = new List<CommandAliasRecord>();
+            using var cmd = new SqliteCommand(sql, _connection);
+            if (userId.HasValue) cmd.Parameters.AddWithValue("@uid", userId.Value);
+
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                list.Add(new CommandAliasRecord
+                {
+                    Id            = reader.GetInt32(0),
+                    UserId        = reader.IsDBNull(1) ? null : reader.GetInt32(1),
+                    Alias         = reader.GetString(2),
+                    ActualCommand = reader.GetString(3),
+                    Description   = reader.IsDBNull(4) ? null : reader.GetString(4),
+                    CreatedAt     = DateTime.Parse(reader.GetString(5))
+                });
+            }
+            return list;
+        }
+
+        /// <summary>Adds a custom voice alias (e.g. "my browser" → "open edge").</summary>
+        public async Task<int> AddAliasAsync(int? userId, string alias, string actualCommand, string? description = null)
+        {
+            var sql = @"INSERT INTO CommandAliases (UserId, Alias, ActualCommand, Description, CreatedAt)
+                        VALUES (@uid, @alias, @cmd, @desc, @now);
+                        SELECT last_insert_rowid();";
+            using var cmd = new SqliteCommand(sql, _connection);
+            cmd.Parameters.AddWithValue("@uid",   userId.HasValue ? userId.Value : DBNull.Value);
+            cmd.Parameters.AddWithValue("@alias", alias.Trim().ToLowerInvariant());
+            cmd.Parameters.AddWithValue("@cmd",   actualCommand.Trim());
+            cmd.Parameters.AddWithValue("@desc",  description ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@now",   DateTime.UtcNow.ToString("O"));
+            var result = await cmd.ExecuteScalarAsync();
+            return Convert.ToInt32(result);
+        }
+
+        /// <summary>Removes an alias by its row id.</summary>
+        public async Task RemoveAliasAsync(int aliasId)
+        {
+            var sql = "DELETE FROM CommandAliases WHERE Id = @id";
+            using var cmd = new SqliteCommand(sql, _connection);
+            cmd.Parameters.AddWithValue("@id", aliasId);
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        #endregion
+
         public void Dispose()
         {
             _connection?.Close();
@@ -673,6 +729,16 @@ namespace AICompanion.Desktop.Services.Database
         public string Command { get; set; } = "";
         public string? Response { get; set; }
         public string? ActionType { get; set; }
+        public DateTime CreatedAt { get; set; }
+    }
+
+    public class CommandAliasRecord
+    {
+        public int Id { get; set; }
+        public int? UserId { get; set; }
+        public string Alias { get; set; } = "";
+        public string ActualCommand { get; set; } = "";
+        public string? Description { get; set; }
         public DateTime CreatedAt { get; set; }
     }
 

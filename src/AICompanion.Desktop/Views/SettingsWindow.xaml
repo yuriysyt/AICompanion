@@ -352,6 +352,10 @@
                                              Margin="0,0,0,8"/>
                                 <RadioButton x:Name="ThemeSystem"
                                              Content="Follow System"
+                                             GroupName="Theme"
+                                             Margin="0,0,0,8"/>
+                                <RadioButton x:Name="ThemeHighContrast"
+                                             Content="High Contrast (Accessibility)"
                                              GroupName="Theme"/>
                             </StackPanel>
                         </Border>

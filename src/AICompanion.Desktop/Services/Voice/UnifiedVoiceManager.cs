@@ -225,7 +225,16 @@ namespace AICompanion.Desktop.Services.Voice
                         modelPath = altPath;
                     else
                     {
-                        _logger?.LogError("[UnifiedVoice] Whisper model '{Model}' not found. Download from https://huggingface.co/ggerganov/whisper.cpp", WhisperModelFileName);
+                        var installDir  = AppDomain.CurrentDomain.BaseDirectory;
+                        var downloadUrl = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin";
+                        var userMsg     = $"Offline voice model not found.\n\n" +
+                                          $"To enable offline speech recognition:\n" +
+                                          $"1. Download: {downloadUrl}\n" +
+                                          $"2. Place the file here:\n   {installDir}{WhisperModelFileName}\n" +
+                                          $"3. Restart AI Companion.\n\n" +
+                                          $"Until then, an internet connection is required for voice commands.";
+                        _logger?.LogError("[UnifiedVoice] Whisper model '{Model}' not found. {Instructions}", WhisperModelFileName, userMsg);
+                        RecognitionError?.Invoke(this, userMsg);
                         return false;
                     }
                 }
