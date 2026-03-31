@@ -1,0 +1,91 @@
+<Window x:Class="AICompanion.Desktop.Views.PinVerificationDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Security Verification"
+        Height="300"
+        Width="360"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize">
+
+    <Border CornerRadius="12"
+            Background="{StaticResource SurfaceBrush}"
+            BorderBrush="{StaticResource PrimaryBrush}"
+            BorderThickness="2">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="15" ShadowDepth="4" Opacity="0.25"
+                              Color="{StaticResource PrimaryColor}"/>
+        </Border.Effect>
+
+        <StackPanel Margin="28,24,28,24">
+
+            <!-- Icon + Title -->
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,8">
+                <TextBlock Text="🔒" FontSize="26" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBlock Text="Security Verification"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource TextPrimaryBrush}"
+                           VerticalAlignment="Center"/>
+            </StackPanel>
+
+            <!-- Description -->
+            <TextBlock x:Name="DescriptionText"
+                       Text="Enter your security PIN to confirm this operation."
+                       FontSize="13"
+                       Foreground="{StaticResource TextSecondaryBrush}"
+                       TextWrapping="Wrap"
+                       TextAlignment="Center"
+                       Margin="0,0,0,20"/>
+
+            <!-- PIN Input -->
+            <TextBlock Text="Security PIN"
+                       FontWeight="SemiBold"
+                       FontSize="13"
+                       Margin="0,0,0,6"/>
+            <PasswordBox x:Name="PinInputBox"
+                         MaxLength="6"
+                         Padding="12,10"
+                         FontSize="16"
+                         FontFamily="Consolas"
+                         Margin="0,0,0,6"/>
+
+            <!-- Error Message -->
+            <TextBlock x:Name="ErrorText"
+                       Foreground="{StaticResource ErrorBrush}"
+                       FontSize="12"
+                       Visibility="Collapsed"
+                       Margin="0,0,0,12"/>
+
+            <!-- Buttons -->
+            <Grid Margin="0,8,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Button Grid.Column="0"
+                        Content="Cancel"
+                        Padding="0,10"
+                        FontSize="14"
+                        Background="Transparent"
+                        BorderBrush="{StaticResource TextSecondaryBrush}"
+                        BorderThickness="1"
+                        Foreground="{StaticResource TextSecondaryBrush}"
+                        Cursor="Hand"
+                        Click="Cancel_Click"/>
+
+                <Button Grid.Column="2"
+                        Content="Confirm"
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        Padding="0,10"
+                        FontSize="14"
+                        Click="Confirm_Click"/>
+            </Grid>
+
+        </StackPanel>
+    </Border>
+</Window>

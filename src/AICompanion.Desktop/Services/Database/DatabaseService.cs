@@ -125,6 +125,9 @@ namespace AICompanion.Desktop.Services.Database
                 @"ALTER TABLE Users ADD COLUMN Email TEXT",
                 // Migration: add HashAlgorithm column (for PBKDF2 upgrade tracking)
                 @"ALTER TABLE Users ADD COLUMN HashAlgorithm TEXT NOT NULL DEFAULT 'SHA256'",
+                // Migration: add PIN columns for high-risk operation confirmation
+                @"ALTER TABLE Users ADD COLUMN PinHash TEXT",
+                @"ALTER TABLE Users ADD COLUMN PinSalt TEXT",
 
                 // Persistent session tokens for Remember Me
                 @"CREATE TABLE IF NOT EXISTS SessionTokens (
@@ -211,6 +214,16 @@ namespace AICompanion.Desktop.Services.Database
                     ExecutedAt TEXT NOT NULL,
                     FOREIGN KEY (UserId) REFERENCES Users(Id),
                     FOREIGN KEY (SecurityCodeId) REFERENCES SecurityCodes(Id)
+                )",
+
+                // Privacy consent log
+                @"CREATE TABLE IF NOT EXISTS PrivacyConsent (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    UserId INTEGER,
+                    ConsentedAt TEXT NOT NULL,
+                    PolicyVersion TEXT NOT NULL DEFAULT '1.0',
+                    IpAddress TEXT,
+                    FOREIGN KEY (UserId) REFERENCES Users(Id)
                 )",
 
                 // Create indexes for performance
@@ -304,7 +317,73 @@ namespace AICompanion.Desktop.Services.Database
             await cmd.ExecuteNonQueryAsync();
         }
 
+        public async Task SetUserPinAsync(int userId, string pinHash, string pinSalt)
+        {
+            var sql = "UPDATE Users SET PinHash = @pinHash, PinSalt = @pinSalt WHERE Id = @userId";
+            using var cmd = new SqliteCommand(sql, _connection);
+            cmd.Parameters.AddWithValue("@pinHash", pinHash);
+            cmd.Parameters.AddWithValue("@pinSalt", pinSalt);
+            cmd.Parameters.AddWithValue("@userId", userId);
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        public async Task<(string? pinHash, string? pinSalt)> GetUserPinAsync(int userId)
+        {
+            var sql = "SELECT PinHash, PinSalt FROM Users WHERE Id = @userId";
+            using var cmd = new SqliteCommand(sql, _connection);
+            cmd.Parameters.AddWithValue("@userId", userId);
+            using var reader = await cmd.ExecuteReaderAsync();
+            if (await reader.ReadAsync())
+            {
+                var hash = reader.IsDBNull(0) ? null : reader.GetString(0);
+                var salt = reader.IsDBNull(1) ? null : reader.GetString(1);
+                return (hash, salt);
+            }
+            return (null, null);
+        }
+
         #endregion
+
+        #region Privacy Consent
+
+        public async Task LogConsentAsync(int? userId, string policyVersion = "1.0")
+        {
+            var sql = @"INSERT INTO PrivacyConsent (UserId, ConsentedAt, PolicyVersion)
+                        VALUES (@userId, @now, @version)";
+            using var cmd = new SqliteCommand(sql, _connection);
+            cmd.Parameters.AddWithValue("@userId", userId.HasValue ? userId.Value : DBNull.Value);
+            cmd.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("O"));
+            cmd.Parameters.AddWithValue("@version", policyVersion);
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        public async Task<bool> HasConsentedAsync(int userId, string policyVersion = "1.0")
+        {
+            var sql = "SELECT COUNT(*) FROM PrivacyConsent WHERE UserId = @userId AND PolicyVersion = @version";
+            using var cmd = new SqliteCommand(sql, _connection);
+            cmd.Parameters.AddWithValue("@userId", userId);
+            cmd.Parameters.AddWithValue("@version", policyVersion);
+            var result = await cmd.ExecuteScalarAsync();
+            return Convert.ToInt64(result) > 0;
+        }
+
+        // For first-run (pre-login) consent tracking using a local flag file
+        public static string ConsentFlagPath => System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "AICompanion", "privacy_accepted.flag");
+
+        public static bool HasFirstRunConsent()
+        {
+            return File.Exists(ConsentFlagPath);
+        }
+
+        public static void MarkFirstRunConsent()
+        {
+            File.WriteAllText(ConsentFlagPath, DateTime.UtcNow.ToString("O"));
+        }
+
+        #endregion
+
 
         #region Security Codes
 
@@ -700,6 +779,8 @@ namespace AICompanion.Desktop.Services.Database
         public string PasswordHash { get; set; } = "";
         public string Salt { get; set; } = "";
         public string HashAlgorithm { get; set; } = "SHA256";
+        public string? PinHash { get; set; }
+        public string? PinSalt { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? LastLoginAt { get; set; }
     }

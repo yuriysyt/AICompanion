@@ -1,0 +1,138 @@
+<Window x:Class="AICompanion.Desktop.Views.PrivacyPolicyWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="AI Companion — Privacy Policy"
+        Height="560"
+        Width="540"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize">
+
+    <Border CornerRadius="14"
+            Background="{StaticResource SurfaceBrush}"
+            BorderBrush="{StaticResource PrimaryBrush}"
+            BorderThickness="2">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="20" ShadowDepth="5" Opacity="0.3"
+                              Color="{StaticResource PrimaryColor}"/>
+        </Border.Effect>
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <Border Grid.Row="0"
+                    Background="{StaticResource PrimaryGradientBrush}"
+                    CornerRadius="12,12,0,0"
+                    Padding="24,16">
+                <StackPanel>
+                    <TextBlock Text="Privacy Policy"
+                               FontSize="20"
+                               FontWeight="Bold"
+                               Foreground="White"/>
+                    <TextBlock Text="Version 1.0 — Please read before continuing"
+                               FontSize="12"
+                               Foreground="#CCffffff"
+                               Margin="0,4,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Policy text -->
+            <ScrollViewer Grid.Row="1" Margin="0" VerticalScrollBarVisibility="Auto">
+                <TextBlock Margin="24,18,24,12"
+                           FontSize="13"
+                           Foreground="{StaticResource TextPrimaryBrush}"
+                           TextWrapping="Wrap"
+                           LineHeight="20">
+<Run FontWeight="Bold">1. Data We Collect</Run>
+<LineBreak/>
+AI Companion collects the following data locally on your device:
+• Voice commands you speak or type
+• Conversation history (encrypted with AES-256)
+• Application settings and preferences
+• Actions taken on your behalf (automation log)
+<LineBreak/><LineBreak/>
+<Run FontWeight="Bold">2. How Your Data Is Used</Run>
+<LineBreak/>
+Your data is used exclusively to:
+• Process your commands and automate tasks
+• Improve response accuracy within your session
+• Store your preferences for future sessions
+<LineBreak/><LineBreak/>
+<Run FontWeight="Bold">3. Data Storage and Encryption</Run>
+<LineBreak/>
+All data is stored locally on your device in an SQLite database protected by AES-256 encryption. The encryption key is protected by Windows Data Protection API (DPAPI) and is specific to your Windows account. No data is sent to external servers without your explicit command.
+<LineBreak/><LineBreak/>
+<Run FontWeight="Bold">4. Sensitive Data Protection</Run>
+<LineBreak/>
+Before sending any command to the AI processing engine, AI Companion automatically removes:
+• Full file paths (replaced with anonymized tokens like "document_1")
+• Usernames embedded in paths
+• Other personally identifiable information
+<LineBreak/><LineBreak/>
+<Run FontWeight="Bold">5. IBM Granite / Ollama</Run>
+<LineBreak/>
+AI processing is performed locally using IBM Granite via Ollama running on your device (localhost:11434). Your commands are NOT sent to any cloud service unless you explicitly ask to search the web.
+<LineBreak/><LineBreak/>
+<Run FontWeight="Bold">6. Security PIN</Run>
+<LineBreak/>
+A security PIN you set during registration is stored as a PBKDF2-hashed value. It is never stored in plain text and is never transmitted.
+<LineBreak/><LineBreak/>
+<Run FontWeight="Bold">7. Your Rights</Run>
+<LineBreak/>
+You can clear all conversation history at any time via Settings → Clear History. Deleting the application removes all locally stored data.
+<LineBreak/><LineBreak/>
+<Run FontWeight="Bold">8. Contact</Run>
+<LineBreak/>
+For privacy concerns related to this application, contact your system administrator or the project maintainer.
+                </TextBlock>
+            </ScrollViewer>
+
+            <!-- Footer: checkbox + button -->
+            <StackPanel Grid.Row="2" Margin="24,12,24,20">
+                <CheckBox x:Name="AgreeCheckBox"
+                          Content="I have read and agree to the Privacy Policy"
+                          FontSize="13"
+                          FontWeight="SemiBold"
+                          Foreground="{StaticResource TextPrimaryBrush}"
+                          Margin="0,0,0,14"
+                          Checked="AgreeCheckBox_Changed"
+                          Unchecked="AgreeCheckBox_Changed"/>
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="12"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <Button Grid.Column="0"
+                            Content="Exit"
+                            Padding="0,10"
+                            FontSize="14"
+                            Background="Transparent"
+                            BorderBrush="{StaticResource TextSecondaryBrush}"
+                            BorderThickness="1"
+                            Foreground="{StaticResource TextSecondaryBrush}"
+                            Cursor="Hand"
+                            Click="Exit_Click"/>
+
+                    <Button Grid.Column="2"
+                            x:Name="ContinueButton"
+                            Content="Continue"
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            Padding="0,10"
+                            FontSize="14"
+                            IsEnabled="False"
+                            Click="Continue_Click"/>
+                </Grid>
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

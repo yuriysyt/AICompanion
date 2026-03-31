@@ -11,6 +11,7 @@ using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using AICompanion.Desktop.Services;
 
 namespace AICompanion.Desktop.Services.Automation
 {
@@ -153,8 +154,41 @@ namespace AICompanion.Desktop.Services.Automation
         /// <summary>
         /// Optional session context JSON injected by the caller before each plan request.
         /// Included in the /api/plan payload so the AI backend maintains cross-command memory.
+        /// When ContextManager is set, this is auto-populated before every plan request.
         /// </summary>
         public string? SessionContext { get; set; }
+
+        /// <summary>
+        /// When set, automatically builds SessionContext from recent command history
+        /// and updates the context after each successfully executed plan.
+        /// </summary>
+        public ContextManager? ContextManager { get; set; }
+
+        /// <summary>
+        /// When set, sanitizes the command text before sending to the AI backend
+        /// (removes absolute paths, usernames, etc.).
+        /// </summary>
+        public DataSanitizer? DataSanitizer { get; set; }
+
+        /// <summary>
+        /// When set, used to verify the user's PIN before executing a high-risk action.
+        /// </summary>
+        public AICompanion.Desktop.Services.Security.SecurityService? SecurityService { get; set; }
+
+        /// <summary>
+        /// When set and a dangerous action is attempted, this delegate is invoked to
+        /// prompt the user for their PIN. Return the entered PIN string, or null to cancel.
+        /// Must be called on the UI thread; wrap with Dispatcher.Invoke inside the delegate.
+        /// </summary>
+        public Func<string, Task<string?>>? PinVerificationRequired { get; set; }
+
+        // Actions that require PIN confirmation before execution
+        private static readonly HashSet<string> _dangerousActions = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "delete_file", "delete_folder", "format_drive", "shutdown_computer",
+            "restart_computer", "kill_process", "clear_history", "export_data",
+            "delete_account", "change_password", "modify_system"
+        };
 
         // ====== Constructor ======
 
@@ -369,6 +403,15 @@ namespace AICompanion.Desktop.Services.Automation
                         break;
                     }
 
+                    // Record completed command in ContextManager for cross-command memory
+                    if (ContextManager != null && lastResult != null)
+                    {
+                        var resultSummary = criticalFails.Count == 0
+                            ? $"OK ({_currentPlan.TotalSteps} steps)"
+                            : $"partial ({_currentPlan.TotalSteps - criticalFails.Count}/{_currentPlan.TotalSteps} steps)";
+                        ContextManager.AddCommandResult(commandText, resultSummary);
+                    }
+
                     // Still have attempts left — re-plan with failure context
                     if (planAttempt < MaxPlanRetries)
                     {
@@ -465,6 +508,13 @@ namespace AICompanion.Desktop.Services.Automation
 
         private async Task<AgenticPlanDto?> RequestPlanAsync(string text, CancellationToken ct)
         {
+            // Sanitize command text: remove absolute paths before sending to LLM
+            var sanitizedText = DataSanitizer != null ? DataSanitizer.Sanitize(text) : text;
+
+            // Auto-build session context from ContextManager if available
+            if (ContextManager != null)
+                SessionContext = ContextManager.BuildContextString();
+
             var rawTitle = _automation.GetWindowTitle(_automation.GetCurrentForegroundWindow());
             var fgTitle  = SanitizeWindowTitle(rawTitle);
             var openWindows = new List<string>();
@@ -476,9 +526,16 @@ namespace AICompanion.Desktop.Services.Automation
                 if (!openWindows.Contains(wt, StringComparer.OrdinalIgnoreCase))
                     openWindows.Add(wt);
 
+            // Update ContextManager's active app from open windows
+            if (ContextManager != null && openWindows.Count > 0)
+                ContextManager.UpdateActiveApp(openWindows[^1], fgTitle);
+
+            _logger?.LogInformation("[AGENT] POST /api/plan: '{Text}' (window: {Win}, context: {CtxLen} chars)",
+                sanitizedText, fgTitle, SessionContext?.Length ?? 0);
+
             var payload = JsonSerializer.Serialize(new
             {
-                text,
+                text             = sanitizedText,
                 max_steps        = 8,
                 window_title     = fgTitle,
                 window_process   = "(desktop)",
@@ -487,7 +544,6 @@ namespace AICompanion.Desktop.Services.Automation
             });
             var content = new StringContent(payload, Encoding.UTF8, "application/json");
 
-            _logger?.LogInformation("[AGENT] POST /api/plan: '{Text}' (window: {Win})", text, fgTitle);
             var response = await _httpClient.PostAsync(PlanEndpoint, content, ct).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
 
@@ -505,6 +561,36 @@ namespace AICompanion.Desktop.Services.Automation
             try
             {
                 var action = step.Action.ToLowerInvariant();
+
+                // ── PIN gate for high-risk actions ───────────────────────────────
+                if (_dangerousActions.Contains(action) && SecurityService != null)
+                {
+                    if (PinVerificationRequired != null)
+                    {
+                        var pin = await PinVerificationRequired(action).ConfigureAwait(false);
+                        if (string.IsNullOrEmpty(pin))
+                        {
+                            StatusMessage?.Invoke(this, $"🚫 Operation '{action}' cancelled — PIN not provided.");
+                            _logger?.LogWarning("[AGENT] Dangerous action '{Action}' cancelled by user (no PIN)", action);
+                            return false;
+                        }
+
+                        var (allowed, msg) = await SecurityService.AuthorizeDangerousOperationAsync(action, pin).ConfigureAwait(false);
+                        if (!allowed)
+                        {
+                            StatusMessage?.Invoke(this, $"🚫 {msg ?? "Operation denied — incorrect PIN."}");
+                            _logger?.LogWarning("[AGENT] Dangerous action '{Action}' denied: {Msg}", action, msg);
+                            return false;
+                        }
+                    }
+                    else
+                    {
+                        // No PIN UI wired up — block dangerous actions by default
+                        StatusMessage?.Invoke(this, $"🚫 Dangerous action '{action}' blocked — PIN verification not configured.");
+                        return false;
+                    }
+                }
+
                 if (_skills.TryGetValue(action, out var handler))
                     return await handler(this, step, ct);
 

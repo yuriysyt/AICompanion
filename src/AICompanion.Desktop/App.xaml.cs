@@ -17,6 +17,7 @@ using AICompanion.Desktop.Services.Dictation;
 using AICompanion.Desktop.Services.Security;
 using AICompanion.Desktop.ViewModels;
 using AICompanion.Desktop.Views;
+using System.Threading;
 using Serilog;
 
 namespace AICompanion.Desktop
@@ -64,6 +65,20 @@ namespace AICompanion.Desktop
             }
 
             ApplyThemeFromConfig();
+
+            // ── Privacy Policy gate (first run) ─────────────────────────────────
+            if (!DatabaseService.HasFirstRunConsent())
+            {
+                var privacyWindow = new PrivacyPolicyWindow();
+                var accepted = privacyWindow.ShowDialog();
+                if (accepted != true || !privacyWindow.Accepted)
+                {
+                    Log.Information("User declined privacy policy — shutting down");
+                    Shutdown(0);
+                    return;
+                }
+                Log.Information("Privacy policy accepted by user");
+            }
 
             // ── Multi-user login gate ────────────────────────────────────────────
             // Show LoginWindow if "RequireLogin" is enabled in settings.
@@ -269,6 +284,10 @@ namespace AICompanion.Desktop
             services.AddSingleton<SecureApiKeyManager>();
             services.AddSingleton<SecurityService>();
 
+            // Privacy & data protection services
+            services.AddSingleton<DataSanitizer>();
+            services.AddSingleton<ContextManager>();
+
             services.AddSingleton<ElevenLabsService>();
             services.AddSingleton<ElevenLabsSpeechService>();
 
@@ -316,9 +335,16 @@ namespace AICompanion.Desktop
 
             services.AddSingleton<AgenticExecutionService>(sp =>
             {
-                var automation = sp.GetRequiredService<WindowAutomationHelper>();
-                var logger = sp.GetService<ILogger<AgenticExecutionService>>();
-                return new AgenticExecutionService(automation, logger);
+                var automation      = sp.GetRequiredService<WindowAutomationHelper>();
+                var logger          = sp.GetService<ILogger<AgenticExecutionService>>();
+                var contextManager  = sp.GetRequiredService<ContextManager>();
+                var dataSanitizer   = sp.GetRequiredService<DataSanitizer>();
+                var securityService = sp.GetRequiredService<AICompanion.Desktop.Services.Security.SecurityService>();
+                var svc = new AgenticExecutionService(automation, logger);
+                svc.ContextManager  = contextManager;
+                svc.DataSanitizer   = dataSanitizer;
+                svc.SecurityService = securityService;
+                return svc;
             });
 
             services.AddSingleton<AIEngineClient>();

@@ -549,6 +549,23 @@ namespace AICompanion.Desktop.Views
                 return await tcs.Task;
             };
 
+            // Wire up PIN verification dialog for dangerous operations
+            svc.PinVerificationRequired = async (operationName) =>
+            {
+                string? pin = null;
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    var dialog = new PinVerificationDialog
+                    {
+                        Owner = this,
+                        OperationDescription = operationName
+                    };
+                    if (dialog.ShowDialog() == true)
+                        pin = dialog.EnteredPin;
+                });
+                return pin;
+            };
+
             _agenticService = svc;
             return _agenticService;
         }

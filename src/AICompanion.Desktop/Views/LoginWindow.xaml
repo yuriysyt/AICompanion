@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="AI Companion - Login"
-        Height="580"
+        Height="680"
         Width="400"
         WindowStyle="None"
         AllowsTransparency="True"
@@ -194,7 +194,21 @@
                     <PasswordBox x:Name="RegisterConfirmPasswordBox"
                                  Padding="12,10"
                                  FontSize="14"
-                                 Margin="0,0,0,15"/>
+                                 Margin="0,0,0,12"/>
+
+                    <!-- Security PIN -->
+                    <TextBlock Text="Security PIN (4-6 digits)"
+                               FontWeight="SemiBold"
+                               Margin="0,0,0,6"/>
+                    <PasswordBox x:Name="RegisterPinBox"
+                                 MaxLength="6"
+                                 Padding="12,10"
+                                 FontSize="14"
+                                 Margin="0,0,0,4"/>
+                    <TextBlock Text="You will need this PIN to confirm sensitive operations"
+                               FontSize="11"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               Margin="0,0,0,15"/>
 
                     <!-- Error Message -->
                     <TextBlock x:Name="RegisterErrorMessage"

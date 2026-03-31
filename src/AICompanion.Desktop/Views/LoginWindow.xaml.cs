@@ -164,6 +164,7 @@ namespace AICompanion.Desktop.Views
             var email = RegisterEmailBox.Text.Trim();
             var password = RegisterPasswordBox.Password;
             var confirmPassword = RegisterConfirmPasswordBox.Password;
+            var pin = RegisterPinBox.Password;
 
             // Validation
             if (string.IsNullOrEmpty(username) || username.Length < 3)
@@ -203,15 +204,33 @@ namespace AICompanion.Desktop.Views
                 return;
             }
 
+            // PIN validation
+            if (string.IsNullOrEmpty(pin) || pin.Length < 4 || pin.Length > 6)
+            {
+                ShowRegisterError("PIN must be 4-6 digits");
+                return;
+            }
+            foreach (var c in pin)
+            {
+                if (!char.IsDigit(c))
+                {
+                    ShowRegisterError("PIN must contain only digits");
+                    return;
+                }
+            }
+
             try
             {
                 if (_securityService != null)
                 {
-                    var result = await _securityService.RegisterAsync(username, email, password);
+                    var result = await _securityService.RegisterAsync(username, email, password, pin);
                     if (result.Success)
                     {
-                        System.Windows.MessageBox.Show("Account created successfully! Please sign in.", "Registration Complete",
-                            System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                        System.Windows.MessageBox.Show(
+                            "Account created successfully!\nYour security PIN has been saved.\nPlease sign in.",
+                            "Registration Complete",
+                            System.Windows.MessageBoxButton.OK,
+                            System.Windows.MessageBoxImage.Information);
                         ShowLogin_Click(sender, e);
                         UsernameBox.Text = username;
                         return;

@@ -204,9 +204,10 @@ namespace AICompanion.Desktop.Services.Security
         }
 
         /// <summary>
-        /// Register new user - returns result with success flag and error message
+        /// Register new user - returns result with success flag and error message.
+        /// Optionally stores a hashed PIN for high-risk operation confirmation.
         /// </summary>
-        public async Task<AuthResult> RegisterAsync(string username, string email, string password)
+        public async Task<AuthResult> RegisterAsync(string username, string email, string password, string? pin = null)
         {
             try
             {
@@ -231,12 +232,32 @@ namespace AICompanion.Desktop.Services.Security
                     };
                 }
 
-                var success = await RegisterUserAsync(username, password, email);
-                return new AuthResult
+                // PIN validation: 4-6 digits if provided
+                if (pin != null)
                 {
-                    Success = success,
-                    ErrorMessage = success ? null : "Registration failed"
-                };
+                    if (pin.Length < 4 || pin.Length > 6 || !pin.All(char.IsDigit))
+                    {
+                        return new AuthResult
+                        {
+                            Success = false,
+                            ErrorMessage = "PIN must be 4-6 digits"
+                        };
+                    }
+                }
+
+                var success = await RegisterUserAsync(username, password, email);
+                if (!success)
+                    return new AuthResult { Success = false, ErrorMessage = "Registration failed" };
+
+                // Store PIN if provided
+                if (pin != null)
+                {
+                    var newUser = await _database.GetUserAsync(username);
+                    if (newUser != null)
+                        await SetUserPinInternalAsync(newUser.Id, pin);
+                }
+
+                return new AuthResult { Success = true };
             }
             catch (Exception ex)
             {
@@ -361,7 +382,27 @@ namespace AICompanion.Desktop.Services.Security
 
             _logger?.LogInformation("[Security] Authorizing dangerous operation: {Operation}", operation);
 
-            // If no code provided, generate one
+            // If a PIN has been configured, use PIN verification
+            if (await UserHasPinAsync())
+            {
+                if (string.IsNullOrEmpty(securityCode))
+                {
+                    // Signal caller to prompt for PIN
+                    return (false, "PIN_REQUIRED");
+                }
+
+                var pinValid = await VerifyUserPinAsync(securityCode);
+                if (!pinValid)
+                {
+                    _logger?.LogWarning("[Security] PIN verification failed for operation {Operation}", operation);
+                    return (false, "Incorrect PIN. Operation denied.");
+                }
+
+                await _database.LogDangerousOperationAsync(_currentUserId, operation, null, null, "authorized_by_pin");
+                return (true, "Operation authorized.");
+            }
+
+            // Fallback: legacy generated-code flow (for accounts without PIN)
             if (string.IsNullOrEmpty(securityCode))
             {
                 var code = await GenerateSecurityCodeAsync(operation);
@@ -369,18 +410,67 @@ namespace AICompanion.Desktop.Services.Security
                               $"It expires in 5 minutes. Please say or enter the code to confirm.");
             }
 
-            // Validate provided code
             var isValid = await ValidateSecurityCodeAsync(securityCode, operation);
             if (!isValid)
             {
                 return (false, "Invalid or expired security code. Please request a new code.");
             }
 
-            // Log the operation
-            await _database.LogDangerousOperationAsync(
-                _currentUserId, operation, null, null, "authorized");
-
+            await _database.LogDangerousOperationAsync(_currentUserId, operation, null, null, "authorized");
             return (true, "Operation authorized.");
+        }
+
+        #endregion
+
+        #region PIN Management
+
+        /// <summary>
+        /// Sets or updates the security PIN for the currently logged-in user.
+        /// </summary>
+        public async Task<bool> SetUserPinAsync(string pin)
+        {
+            if (!IsAuthenticated) return false;
+            if (pin.Length < 4 || pin.Length > 6 || !pin.All(char.IsDigit)) return false;
+
+            await SetUserPinInternalAsync(_currentUserId!.Value, pin);
+            _logger?.LogInformation("[Security] PIN set for user {Username}", _currentUsername);
+            return true;
+        }
+
+        private async Task SetUserPinInternalAsync(int userId, string pin)
+        {
+            var salt = GenerateSalt();
+            var hash = HashPassword(pin, salt);
+            await _database.SetUserPinAsync(userId, hash, salt);
+        }
+
+        /// <summary>
+        /// Verifies the given PIN against the stored hash for the current user.
+        /// </summary>
+        public async Task<bool> VerifyUserPinAsync(string pin)
+        {
+            if (!IsAuthenticated) return false;
+
+            var (pinHash, pinSalt) = await _database.GetUserPinAsync(_currentUserId!.Value);
+            if (pinHash == null || pinSalt == null)
+            {
+                // No PIN set — fail closed (don't allow dangerous ops without PIN)
+                _logger?.LogWarning("[Security] PIN verification attempted but no PIN is set for {Username}", _currentUsername);
+                return false;
+            }
+
+            var hash = HashPassword(pin, pinSalt);
+            return hash == pinHash;
+        }
+
+        /// <summary>
+        /// Returns true if the current user has a PIN configured.
+        /// </summary>
+        public async Task<bool> UserHasPinAsync()
+        {
+            if (!IsAuthenticated) return false;
+            var (pinHash, _) = await _database.GetUserPinAsync(_currentUserId!.Value);
+            return pinHash != null;
         }
 
         #endregion
