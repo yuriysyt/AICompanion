@@ -103,9 +103,16 @@ namespace AICompanion.Desktop.Services
             (new Regex(@"^(?:create\s+(?:a\s+)?new\s+|new\s+)(?:excel|эксель)\s*(?:document|file|doc|sheet|spreadsheet|таблицу)?", RegexOptions.IgnoreCase), "new_doc_excel"),
             // Context-aware new document: "create document", "create a document", "create new document", "new document"
             (new Regex(@"^(?:create\s+(?:a\s+)?(?:new\s+)?|new\s+)(?:document|file|doc|page|файл|документ)", RegexOptions.IgnoreCase), "new_doc"),
+            // ── Direct type into active window ───────────────────────────────────
+            // "type: Hello World" → paste text into the currently captured target window
+            (new Regex(@"^type:\s+(.+)$", RegexOptions.IgnoreCase), "direct_type"),
+            // "type Hello World in notepad/word" → targeted paste
+            (new Regex(@"^type\s+(.+?)\s+(?:in(?:to)?|to)\s+(?:notepad|блокнот|note(?:\s*book|pad|file)|word|ворд)\s*$", RegexOptions.IgnoreCase), "direct_type"),
             // ── Calculator app automation (System.Windows.Automation) ─────────────
             // "type X in calculator" — opens Calculator and types without returning result
             (new Regex(@"^type\s+(.+?)\s+in(?:to)?\s+calculator\s*$", RegexOptions.IgnoreCase), "calc_type"),
+            // "type text Hello World", "type Hello World" → direct type (strips optional leading "text" word)
+            (new Regex(@"^type\s+(?:text\s+)?(.+)$", RegexOptions.IgnoreCase), "direct_type"),
             // "calculate X", "compute X", "посчитай X" → open Calculator, run, read result
             (new Regex(@"^(?:calculate|compute|eval|посчитай|посчитайте|вычисли|please\s+calculate|can\s+you\s+calculate)\s+(.+)$", RegexOptions.IgnoreCase), "calc_app"),
             // Natural word-form: "123 plus 456", "999 times 7", "1000 minus 337", "100 divided by 4"
@@ -285,6 +292,31 @@ namespace AICompanion.Desktop.Services
             _logger?.LogInformation("[SMART] Text editor memory cleared");
         }
 
+        /// <summary>
+        /// Called by Quick Command buttons so subsequent "type [text]" commands can find
+        /// the window without going through the agentic pipeline.
+        /// </summary>
+        public void NotifyAppOpened(string friendlyName, IntPtr hwnd = default)
+        {
+            _lastOpenedApp = friendlyName;
+            if (hwnd != IntPtr.Zero)
+            {
+                var title = GetWindowTitle(hwnd);
+                if (!title.Contains("AI Companion", StringComparison.OrdinalIgnoreCase))
+                {
+                    _lastTargetWindow      = hwnd;
+                    _lastTargetWindowTitle = title;
+                    if (IsTextEditorWindow(title))
+                    {
+                        _lastTextEditorWindow  = hwnd;
+                        _lastTextEditorTitle   = title;
+                        _lastTextEditorProcess = DetectProcessType(title);
+                    }
+                }
+            }
+            _logger?.LogInformation("[CAPTURE] Quick-launched: '{App}' (Handle: {H})", friendlyName, hwnd);
+        }
+
         // ── IsComplexCommand ─────────────────────────────────────────────────────
 
         public bool IsComplexCommand(string input)
@@ -388,6 +420,17 @@ namespace AICompanion.Desktop.Services
             if (Regex.IsMatch(lower, @"^what\s+is\s+\d.+"))
                 return false;
             if (Regex.IsMatch(lower, @"^type\s+.+\s+in(?:to)?\s+calculator\s*$"))
+                return false;
+
+            // "type: [text]" is always direct-type regardless of word count
+            if (Regex.IsMatch(lower, @"^type:\s+.+$")) return false;
+
+            // "type [text] in/into notepad/word" is single-intent regardless of word count
+            if (Regex.IsMatch(lower, @"^type\s+.+\s+(?:in(?:to)?|to)\s+(?:notepad|блокнот|note(?:\s*book|pad|file)|word|ворд)\s*$"))
+                return false;
+
+            // Any bare "type [text]" is direct-type regardless of word count
+            if (Regex.IsMatch(lower, @"^type\s+.+$"))
                 return false;
 
             // Four or more words → complex
@@ -601,6 +644,7 @@ namespace AICompanion.Desktop.Services
                         "new_doc_word"      => ExecuteNewDocument("WINWORD"),
                         "new_doc_notepad"   => ExecuteNewDocument("notepad"),
                         "new_doc_excel"     => ExecuteNewDocument("EXCEL"),
+                        "direct_type"    => ExecuteDirectType(m.Groups[1].Value.Trim()),
                         "calc_app"       => ExecuteCalculation(m.Groups[1].Value.Trim()),
                         "calc_type"      => ExecuteCalcType(m.Groups[1].Value.Trim()),
                         "math_expr"      => EvalMath(m.Groups[1].Value.Trim()),
@@ -754,8 +798,17 @@ namespace AICompanion.Desktop.Services
                 {
                     ShowWindow(existingHwnd, 9 /* SW_RESTORE */);
                     SetForegroundWindow(existingHwnd);
-                    _lastOpenedApp  = friendly;
-                    _currentContext = ResolveContext(processName);
+                    _lastOpenedApp         = friendly;
+                    _currentContext        = ResolveContext(processName);
+                    // Update target so subsequent "type: ..." commands reach this window
+                    _lastTargetWindow      = existingHwnd;
+                    _lastTargetWindowTitle = GetWindowTitle(existingHwnd);
+                    if (IsTextEditorWindow(_lastTargetWindowTitle))
+                    {
+                        _lastTextEditorWindow  = existingHwnd;
+                        _lastTextEditorTitle   = _lastTargetWindowTitle;
+                        _lastTextEditorProcess = DetectProcessType(_lastTargetWindowTitle);
+                    }
                     _logger?.LogInformation("[APP] Reused running process '{P}' — brought to front", processName);
                     return new CommandResult(true, $"Switched to {friendly}", $"Switched to the open {friendly} window.");
                 }
@@ -790,7 +843,9 @@ namespace AICompanion.Desktop.Services
                 if (string.IsNullOrWhiteSpace(title)) return true;
 
                 bool titleMatch = title.Contains(stem, StringComparison.OrdinalIgnoreCase)
-                    || (title.Contains("Блокнот", StringComparison.OrdinalIgnoreCase) && stem == "notepad");
+                    || (title.Contains("Блокнот", StringComparison.OrdinalIgnoreCase) && stem == "notepad")
+                    || (title.Contains("Word",  StringComparison.OrdinalIgnoreCase) && stem == "winword")
+                    || (title.Contains("Excel", StringComparison.OrdinalIgnoreCase) && stem == "excel");
 
                 if (!titleMatch) return true;
 
@@ -1740,6 +1795,95 @@ Tip: 'How do I copy text?' gives detailed instructions.";
         /// returns it in the command response.
         /// Falls back to local DataTable.Compute if UI Automation fails.
         /// </summary>
+
+        // ── ExecuteDirectType ────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Pastes <paramref name="text"/> into the last captured target window via clipboard.
+        /// Works on Russian keyboard layout (clipboard paste is layout-independent).
+        /// </summary>
+        private CommandResult ExecuteDirectType(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return new CommandResult(false, "Nothing to type", "Please specify the text to type.");
+
+            var hwnd = _lastTextEditorWindow != IntPtr.Zero ? _lastTextEditorWindow
+                     : _lastTargetWindow     != IntPtr.Zero ? _lastTargetWindow
+                     : IntPtr.Zero;
+
+            // If no window captured yet, try to find the last opened app by process name
+            if (hwnd == IntPtr.Zero && !string.IsNullOrEmpty(_lastOpenedApp))
+            {
+                if (_appMappings.TryGetValue(_lastOpenedApp.ToLowerInvariant(), out var proc))
+                    hwnd = FindWindowByProcessOrTitle(proc);
+            }
+
+            // Fallback: scan for any running text editor (covers apps opened agentically or externally)
+            if (hwnd == IntPtr.Zero)
+            {
+                foreach (var procName in new[] { "notepad", "WINWORD", "wordpad" })
+                {
+                    hwnd = FindWindowByProcessOrTitle(procName);
+                    if (hwnd != IntPtr.Zero) break;
+                }
+            }
+
+            // Last resort: whatever is currently in the foreground (excluding AI Companion)
+            if (hwnd == IntPtr.Zero)
+            {
+                var fg = GetForegroundWindow();
+                var fgTitle = GetWindowTitle(fg);
+                if (!fgTitle.Contains("AI Companion", StringComparison.OrdinalIgnoreCase))
+                    hwnd = fg;
+            }
+
+            if (hwnd == IntPtr.Zero)
+                return new CommandResult(false, "⚠️ No window to type into", "Open an app first.");
+
+            var windowTitle = GetWindowTitle(hwnd);
+            if (windowTitle.Contains("AI Companion", StringComparison.OrdinalIgnoreCase))
+                return new CommandResult(false, "⚠️ Cannot type into AI Companion itself", "Open Notepad or Word first.");
+
+            // Set clipboard on a dedicated STA thread (WPF Clipboard requires STA)
+            bool clipboardSet = false;
+            var staThread = new Thread(() =>
+            {
+                try
+                {
+                    System.Windows.Clipboard.SetText(text);
+                    clipboardSet = true;
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "[DIRECT-TYPE] Clipboard.SetText failed");
+                }
+            });
+            staThread.SetApartmentState(ApartmentState.STA);
+            staThread.Start();
+            staThread.Join(2000);
+
+            if (!clipboardSet)
+                return new CommandResult(false, "Clipboard unavailable", "Could not set clipboard text.");
+
+            // Bring target window to front and give it focus
+            ShowWindow(hwnd, 9 /* SW_RESTORE */);
+            SetForegroundWindow(hwnd);
+            Thread.Sleep(250);
+
+            // Ctrl+V — layout-independent, works on Russian keyboards
+            keybd_event(VK_CONTROL, 0, 0, UIntPtr.Zero);
+            keybd_event(0x56 /* V */, 0, 0, UIntPtr.Zero);
+            keybd_event(0x56,        0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+            keybd_event(VK_CONTROL,  0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+
+            Thread.Sleep(100);
+            _lastTypedText = text;
+
+            _logger?.LogInformation("[DIRECT-TYPE] Pasted {Len} chars into '{Title}'", text.Length, windowTitle);
+            return new CommandResult(true, $"Typed {text.Length} characters into {windowTitle}",
+                $"Done! I typed your text into {windowTitle}.");
+        }
+
         private CommandResult ExecuteCalculation(string expression)
         {
             var normalized = NormalizeCalcExpression(expression);

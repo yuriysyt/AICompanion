@@ -1849,11 +1849,13 @@ Tip: Speak clearly and wait for recognition";
                     {
                         QuickLaunchShowWindow(existingHwnd, 9 /*SW_RESTORE*/);
                         QuickLaunchSetForeground(existingHwnd);
+                        _commandProcessor.NotifyAppOpened(friendlyName, existingHwnd);
                         AddActivity($"Switched to {friendlyName}", true);
                     }
                     else
                     {
                         Process.Start(new ProcessStartInfo { FileName = command, UseShellExecute = true });
+                        _commandProcessor.NotifyAppOpened(friendlyName);
                         AddActivity($"Opened {friendlyName}", true);
                     }
                     UpdateAvatarExpression(true);

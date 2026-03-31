@@ -1670,7 +1670,17 @@ namespace AICompanion.Desktop.Services.Automation
             var fgTitle = _automation.GetWindowTitle(fg);
             if (fgTitle.Contains("AI Companion", StringComparison.OrdinalIgnoreCase))
             {
-                _logger?.LogWarning("[AGENT] Foreground is AI Companion — cannot use as target");
+                _logger?.LogWarning("[AGENT] Foreground is AI Companion — scanning for text editor process");
+                // Fallback: scan for known text editor / document app processes
+                foreach (var procName in new[] { "WINWORD", "notepad", "wordpad" })
+                {
+                    var editorHwnd = _automation.FindWindowByProcessName(procName);
+                    if (editorHwnd != IntPtr.Zero)
+                    {
+                        _logger?.LogInformation("[AGENT] GetBestTargetWindow: found editor via process '{P}' (Handle: {H})", procName, editorHwnd);
+                        return editorHwnd;
+                    }
+                }
                 return IntPtr.Zero;
             }
 
